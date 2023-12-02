@@ -2,6 +2,17 @@ import pandas as pd
 
 
 def fixPathTraversals(PTs: pd.DataFrame):
+    """
+    Adds some additional columns to a dataframe of path traversal events, including
+    corrected occupancy, vehicle miles, passenger miles, and a mode_extended column
+    that differentiates ridehail
+
+    Parameters:
+        PTs (pd.DataFrame): Raw path traversal events
+
+    Returns:
+        pd.DataFrame: The preprocessed DataFrame.
+    """
     PTs["duration"] = PTs["arrivalTime"] - PTs["departureTime"]
     PTs["mode_extended"] = PTs["mode"]
     PTs["isRH"] = PTs["vehicle"].str.contains("rideHail")

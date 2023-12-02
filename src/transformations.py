@@ -1,4 +1,47 @@
 import pandas as pd
+import numpy as np
+
+
+def getLinkStats(PTs: pd.DataFrame):
+    """
+    Calculates a replacement linkStats file based on the link travel times reported in path traversals
+
+    Parameters:
+        PTs (pd.DataFrame): Raw path traversal events
+
+    Returns:
+        pd.DataFrame: a dataframe of link volumes and travel times from the path traversal events
+    """
+    linksAndTravelTimes = pd.concat(
+        [
+            PTs.links.str.split(","),
+            PTs.linkTravelTime.str.split(","),
+            PTs.departureTime,
+        ],
+        axis=1,
+    ).explode(["links", "linkTravelTime"])
+    linksAndTravelTimes["linkTravelTime"] = linksAndTravelTimes[
+        "linkTravelTime"
+    ].astype(float)
+    linksAndTravelTimes = linksAndTravelTimes.loc[
+        linksAndTravelTimes.index.duplicated(keep="first")
+    ]
+    linksAndTravelTimes["cumulativeTravelTime"] = linksAndTravelTimes.groupby(
+        level=0
+    ).agg({"linkTravelTime": np.cumsum})
+    linksAndTravelTimes["hour"] = np.floor(
+        (
+            linksAndTravelTimes["cumulativeTravelTime"]
+            + linksAndTravelTimes["departureTime"]
+        )
+        / 3600.0
+    )
+    linksAndTravelTimes["volume"] = 1.0
+    grouped = linksAndTravelTimes.groupby(["links", "hour"]).agg(
+        {"linkTravelTime": np.sum, "volume": np.sum}
+    )
+    print("Aggregating links into size {0}".format(grouped.index.levshape))
+    return grouped
 
 
 def fixPathTraversals(PTs: pd.DataFrame):

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 
 from src.input import BeamRunInputDirectory
-from src.transformations import fixPathTraversals
+from src.transformations import fixPathTraversals, getLinkStats
 
 
 class OutputDataDirectory:
@@ -29,6 +29,7 @@ class BeamOutputData:
         personEntersVehicleEvents (PersonEntersVehicleEvents): Person enters vehicle events data.
         modeChoiceEvents (ModeChoiceEvents): Mode choice events data.
         modeVMT (ModeVMT): Mode vehicle miles traveled data.
+        linkStatsFromPathTraversals (LinkStatsFromPathTraversals): Alternative linkstats
     """
 
     def __init__(
@@ -55,6 +56,9 @@ class BeamOutputData:
             self.outputDataDirectory, self.beamRunInputDirectory
         )
         self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
+        self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
+            self.outputDataDirectory, self.pathTraversalEvents
+        )
 
 
 class OutputDataFrame:
@@ -141,6 +145,7 @@ class PathTraversalEvents(OutputDataFrame):
         beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         indexedOn: The column to use as the index when loading data.
     """
+
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
@@ -190,6 +195,7 @@ class PersonEntersVehicleEvents(OutputDataFrame):
         beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         indexedOn: The column to use as the index when loading data.
     """
+
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
@@ -227,6 +233,7 @@ class ModeChoiceEvents(OutputDataFrame):
         beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         indexedOn: The column to use as the index when loading data.
     """
+
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
@@ -251,6 +258,7 @@ class ModeVMT(OutputDataFrame):
         pathTraversalEvents (PathTraversalEvents): Path traversal events data.
         indexedOn: The column to use as the index when loading data.
     """
+
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
@@ -279,3 +287,42 @@ class ModeVMT(OutputDataFrame):
         )
         df.index.name = self.indexedOn
         return df
+
+
+class LinkStatsFromPathTraversals(OutputDataFrame):
+    """
+    Alternative linkstats file, calculated from the PathTraversalEvents
+
+    Attributes:
+        pathTraversalEvents (PathTraversalEvents): Path traversal events data.
+        indexedOn: The column to use as the index when loading data.
+    """
+
+    def __init__(
+        self,
+        outputDataDirectory: OutputDataDirectory,
+        pathTraversalEvents: PathTraversalEvents,
+    ):
+        """
+        Initializes a ModeVMT instance.
+
+        Parameters:
+            outputDataDirectory (OutputDataDirectory): The output data directory.
+            pathTraversalEvents (PathTraversalEvents): Path traversal events data.
+        """
+        super().__init__(outputDataDirectory)
+        self.indexedOn = ["linkId", "hour"]
+        self.pathTraversalEvents = pathTraversalEvents
+
+    def load(self):
+        """
+        Aggregates mode vehicle miles traveled data from the path traversal events data.
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame.
+        """
+        df = self.pathTraversalEvents.dataFrame
+        return df
+
+    def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
+        return getLinkStats(df)

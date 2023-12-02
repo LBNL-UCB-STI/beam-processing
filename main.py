@@ -8,5 +8,5 @@ if __name__ == "__main__":
     beamOutputData = output.BeamOutputData(
         output.OutputDataDirectory("output"), directory
     )
-    beamOutputData.modeVMT.toCsv()
+    beamOutputData.linkStatsFromPathTraversals.toCsv()
     print("stop")

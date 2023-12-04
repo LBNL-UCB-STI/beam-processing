@@ -46,6 +46,11 @@ class BeamOutputData:
         """
         self.outputDataDirectory = outputDataDirectory
         self.beamRunInputDirectory = beamRunInputDirectory
+
+        self.beamRunInputDirectory.eventsFile.collectEvents(
+            ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
+        )
+
         self.pathTraversalEvents = PathTraversalEvents(
             self.outputDataDirectory, self.beamRunInputDirectory
         )
@@ -181,8 +186,11 @@ class PathTraversalEvents(OutputDataFrame):
         Returns:
             pd.DataFrame: The loaded DataFrame.
         """
-        df = self.beamInputDirectory.eventsFile.file
-        df = df.loc[df["type"] == "PathTraversal", :].dropna(axis=1, how="all")
+        if "PathTraversal" in self.beamInputDirectory.eventsFile.eventTypes:
+            df = self.beamInputDirectory.eventsFile.eventTypes["PathTraversal"]
+        else:
+            df = self.beamInputDirectory.eventsFile.file
+            df = df.loc[df["type"] == "PathTraversal", :].dropna(axis=1, how="all")
         df.index.name = "event_id"
         return df
 
@@ -219,8 +227,13 @@ class PersonEntersVehicleEvents(OutputDataFrame):
         Returns:
             pd.DataFrame: The loaded DataFrame.
         """
-        df = self.beamInputDirectory.eventsFile.file
-        df = df.loc[df["type"] == "PersonEntersVehicle", :].dropna(axis=1, how="all")
+        if "PersonEntersVehicle" in self.beamInputDirectory.eventsFile.eventTypes:
+            df = self.beamInputDirectory.eventsFile.eventTypes["PersonEntersVehicle"]
+        else:
+            df = self.beamInputDirectory.eventsFile.file
+            df = df.loc[df["type"] == "PersonEntersVehicle", :].dropna(
+                axis=1, how="all"
+            )
         df.index.name = "event_id"
         return df
 
@@ -244,8 +257,11 @@ class ModeChoiceEvents(OutputDataFrame):
         self.indexedOn = "event_id"
 
     def load(self):
-        df = self.beamInputDirectory.eventsFile.file
-        df = df.loc[df["type"] == "ModeChoice", :].dropna(axis=1, how="all")
+        if "ModeChoice" in self.beamInputDirectory.eventsFile.eventTypes:
+            df = self.beamInputDirectory.eventsFile.eventTypes["ModeChoice"]
+        else:
+            df = self.beamInputDirectory.eventsFile.file
+            df = df.loc[df["type"] == "ModeChoice", :].dropna(axis=1, how="all")
         df.index.name = "event_id"
         return df
 

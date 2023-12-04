@@ -11,6 +11,7 @@ class InputDirectory:
         directoryPath (str): The path to the directory.
         isLink (bool): Indicates whether the directory path includes a link either to a website or an s3 or gcloud bucket
     """
+
     def __init__(self, path: str):
         self.directoryPath = path
         self.isLink = "://" in path
@@ -37,7 +38,7 @@ class InputDirectory:
                 return os.path.join(self.directoryPath, relativePath)
 
 
-class OutputFile:
+class RawOutputFile:
     """
     Represents a raw output file. It can be given additional optional properties like index_col and dtype.
 
@@ -47,6 +48,7 @@ class OutputFile:
         dtype: Optional parameter for specifying column data types.
         __file: Internal variable to store the loaded file.
     """
+
     def __init__(
         self, outputDirectory: InputDirectory, relativePath, index_col=None, dtype=None
     ):
@@ -86,13 +88,14 @@ class OutputFile:
         self.__file = None
 
 
-class EventsFile(OutputFile):
+class EventsFile(RawOutputFile):
     """
     Represents an events file produced by BEAM
 
     Attributes:
         (inherits attributes from OutputFile)
     """
+
     def __init__(self, inputDirectory: InputDirectory, iteration: int):
         """
         Initializes an EventsFile instance.
@@ -108,15 +111,29 @@ class EventsFile(OutputFile):
             "{0}.events.csv.gz".format(iteration),
         ]
         super().__init__(inputDirectory, relativePath, dtype=dtypes)
+        self.eventTypes = dict()
+        self.__chunksize = 1000000
+
+    def collectEvents(self, eventTypes: list):
+        __listOfFrames = {eventType: [] for eventType in eventTypes}
+        for chunk in pd.read_csv(self.filePath, chunksize=self.__chunksize):
+            for eventType in eventTypes:
+                __listOfFrames[eventType].append(
+                    chunk.loc[chunk["type"] == eventType, :].dropna(axis=1, how="all")
+                )
+        for eventType in eventTypes:
+            print("Extracting {0} events from raw events file".format(eventType))
+            self.eventTypes[eventType] = pd.concat(__listOfFrames.pop(eventType), axis=0)
 
 
-class LinkStatsFile(OutputFile):
+class LinkStatsFile(RawOutputFile):
     """
     Represents a linkStats file from BEAM.
 
     Attributes:
         (inherits attributes from OutputFile)
     """
+
     def __init__(self, outputDirectory: InputDirectory, iteration: int):
         """
         Initializes a LinkStatsFile instance.
@@ -133,13 +150,14 @@ class LinkStatsFile(OutputFile):
         super().__init__(outputDirectory, relativePath)
 
 
-class InputPlansFile(OutputFile):
+class InputPlansFile(RawOutputFile):
     """
     Represents an input plans file generated for BEAM by ActivitySim.
 
     Attributes:
         (inherits attributes from OutputFile)
     """
+
     def __init__(self, outputDirectory: InputDirectory):
         """
         Initializes an InputPlansFile instance.
@@ -161,6 +179,7 @@ class BeamRunInputDirectory(InputDirectory):
         linkStatsFile (LinkStatsFile): The link stats file for the Beam run.
         (inherits attributes from InputDirectory)
     """
+
     def __init__(self, baseFolderName: str, numberOfIterations: int = 0):
         """
         Initializes a BeamRunInputDirectory instance.

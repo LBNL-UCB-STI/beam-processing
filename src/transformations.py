@@ -69,7 +69,7 @@ def fixPathTraversals(PTs: pd.DataFrame):
     PTs["vehicleMiles"] = PTs["length"] / 1609.34
     PTs["passengerMiles"] = (PTs["length"] * PTs["occupancy"]) / 1609.34
     PTs["totalEnergyInJoules"] = PTs["primaryFuel"] + PTs["secondaryFuel"]
-    PTs["gallonsGasoline"] = 0
+    PTs["gallonsGasoline"] = 0.
     PTs.loc[PTs["primaryFuelType"] == "gasoline", "gallonsGasoline"] += (
         PTs.loc[PTs["primaryFuelType"] == "gasoline", "primaryFuel"] * 8.3141841e-9
     )

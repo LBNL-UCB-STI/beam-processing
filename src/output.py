@@ -1,8 +1,9 @@
 import os
 
 import pandas as pd
+import hashlib
 
-from src.input import BeamRunInputDirectory
+from src.input import BeamRunInputDirectory, InputDirectory
 from src.transformations import fixPathTraversals, getLinkStats
 
 
@@ -77,7 +78,9 @@ class OutputDataFrame:
         indexedOn: The column to use as the index when loading data.
     """
 
-    def __init__(self, outputDataDirectory: OutputDataDirectory):
+    def __init__(
+        self, outputDataDirectory: OutputDataDirectory, inputDirectory: InputDirectory
+    ):
         """
         Initializes an OutputDataFrame instance.
 
@@ -85,8 +88,23 @@ class OutputDataFrame:
             outputDataDirectory (OutputDataDirectory): The output data directory.
         """
         self.outputDataDirectory = outputDataDirectory
+        self.inputDirectory = inputDirectory
         self._dataFrame = None
+        self._diskLocation = os.path.join(
+            self.outputDataDirectory.path,
+            self.hash() + ".parquet",
+        )
         self.indexedOn = None
+
+    def hash(self):
+        m = hashlib.md5()
+        for s in (self.inputDirectory.directoryPath, self.__class__.__name__):
+            m.update(s.encode())
+        return m.hexdigest()
+
+    @property
+    def cached(self) -> bool:
+        return os.path.exists(self._diskLocation)
 
     def load(self):
         """
@@ -106,8 +124,14 @@ class OutputDataFrame:
             pd.DataFrame: The loaded DataFrame.
         """
         if self._dataFrame is None:
-            df = self.load()
-            self._dataFrame = self.preprocess(df)
+            if not self.cached:
+                df = self.load()
+                self._dataFrame = self.preprocess(df)
+                print(self._dataFrame.dtypes)
+                self._dataFrame.to_parquet(self._diskLocation)
+            else:
+                print("Reading {0} file from {1}".format(self.__class__.__name__, self._diskLocation))
+                self._dataFrame = pd.read_parquet(self._diskLocation)
         return self._dataFrame
 
     @dataFrame.setter
@@ -163,7 +187,7 @@ class PathTraversalEvents(OutputDataFrame):
             outputDataDirectory (OutputDataDirectory): The output data directory.
             beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         """
-        super().__init__(outputDataDirectory)
+        super().__init__(outputDataDirectory, beamInputDirectory)
         self.beamInputDirectory = beamInputDirectory
         self.indexedOn = "event_id"
 
@@ -216,7 +240,7 @@ class PersonEntersVehicleEvents(OutputDataFrame):
             outputDataDirectory (OutputDataDirectory): The output data directory.
             beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         """
-        super().__init__(outputDataDirectory)
+        super().__init__(outputDataDirectory, beamInputDirectory)
         self.beamInputDirectory = beamInputDirectory
         self.indexedOn = "event_id"
 
@@ -252,7 +276,7 @@ class ModeChoiceEvents(OutputDataFrame):
         outputDataDirectory: OutputDataDirectory,
         beamInputDirectory: BeamRunInputDirectory,
     ):
-        super().__init__(outputDataDirectory)
+        super().__init__(outputDataDirectory, beamInputDirectory)
         self.beamInputDirectory = beamInputDirectory
         self.indexedOn = "event_id"
 
@@ -287,7 +311,7 @@ class ModeVMT(OutputDataFrame):
             outputDataDirectory (OutputDataDirectory): The output data directory.
             pathTraversalEvents (PathTraversalEvents): Path traversal events data.
         """
-        super().__init__(outputDataDirectory)
+        super().__init__(outputDataDirectory, pathTraversalEvents.inputDirectory)
         self.indexedOn = "pathTraversalMode"
         self.pathTraversalEvents = pathTraversalEvents
 
@@ -326,7 +350,7 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
             outputDataDirectory (OutputDataDirectory): The output data directory.
             pathTraversalEvents (PathTraversalEvents): Path traversal events data.
         """
-        super().__init__(outputDataDirectory)
+        super().__init__(outputDataDirectory, pathTraversalEvents.inputDirectory)
         self.indexedOn = ["linkId", "hour"]
         self.pathTraversalEvents = pathTraversalEvents
 

@@ -115,15 +115,27 @@ class EventsFile(RawOutputFile):
         self.__chunksize = 1000000
 
     def collectEvents(self, eventTypes: list):
+        """
+        Collects specific event types from the raw events file and stores them in the EventsFile instance.
+
+        Parameters:
+            eventTypes (list): A list of event types to collect from the raw events file.
+        """
         __listOfFrames = {eventType: [] for eventType in eventTypes}
-        for chunk in pd.read_csv(self.filePath, chunksize=self.__chunksize):
+        for chunk in pd.read_csv(
+            self.filePath,
+            chunksize=self.__chunksize,
+            dtype={"driver": "str", "riders": "str"},
+        ):
             for eventType in eventTypes:
                 __listOfFrames[eventType].append(
                     chunk.loc[chunk["type"] == eventType, :].dropna(axis=1, how="all")
                 )
         for eventType in eventTypes:
             print("Extracting {0} events from raw events file".format(eventType))
-            self.eventTypes[eventType] = pd.concat(__listOfFrames.pop(eventType), axis=0)
+            self.eventTypes[eventType] = pd.concat(
+                __listOfFrames.pop(eventType), axis=0
+            )
 
 
 class LinkStatsFile(RawOutputFile):
@@ -147,7 +159,26 @@ class LinkStatsFile(RawOutputFile):
             "it.{0}".format(iteration),
             "{0}.linkstats.csv.gz".format(iteration),
         ]
-        super().__init__(outputDirectory, relativePath)
+        super().__init__(outputDirectory, relativePath, index_col=["link", "hour"])
+
+
+class NetworkFile(RawOutputFile):
+    """
+    Represents a network file from BEAM.
+
+    Attributes:
+        (inherits attributes from OutputFile)
+    """
+
+    def __init__(self, outputDirectory: InputDirectory):
+        """
+        Initializes a Network instance.
+
+        Parameters:
+            outputDirectory (InputDirectory): The output directory where the file will be stored.
+        """
+        relativePath = "network.csv.gz"
+        super().__init__(outputDirectory, relativePath, index_col="linkId")
 
 
 class InputPlansFile(RawOutputFile):
@@ -192,3 +223,21 @@ class BeamRunInputDirectory(InputDirectory):
         self.eventsFile = EventsFile(self, numberOfIterations)
         self.inputPlansFile = InputPlansFile(self)
         self.linkStatsFile = LinkStatsFile(self, numberOfIterations)
+
+
+class PersonsFile(RawOutputFile):
+    def __init__(self, outputDirectory: InputDirectory):
+        relativePath = "persons.csv.gz"
+        super().__init__(outputDirectory, relativePath, index_col="person_id")
+
+
+class HouseholdsFile(RawOutputFile):
+    def __init__(self, outputDirectory: InputDirectory):
+        relativePath = "households.csv.gz"
+        super().__init__(outputDirectory, relativePath, index_col="household_id")
+
+
+class ActivitySimRunInputDirectory(InputDirectory):
+    def __init__(self, baseFolderName: str):
+        super().__init__(baseFolderName)
+        self.householdsFile = HouseholdsFile(self)

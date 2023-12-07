@@ -3,8 +3,13 @@ import os
 import pandas as pd
 import hashlib
 
-from src.input import BeamRunInputDirectory, InputDirectory
-from src.transformations import fixPathTraversals, getLinkStats
+from src.input import (
+    BeamRunInputDirectory,
+    InputDirectory,
+    PersonsFile,
+    ActivitySimRunInputDirectory,
+)
+from src.transformations import fixPathTraversals, getLinkStats, filterPersons
 
 
 class OutputDataDirectory:
@@ -130,7 +135,11 @@ class OutputDataFrame:
                 print(self._dataFrame.dtypes)
                 self._dataFrame.to_parquet(self._diskLocation)
             else:
-                print("Reading {0} file from {1}".format(self.__class__.__name__, self._diskLocation))
+                print(
+                    "Reading {0} file from {1}".format(
+                        self.__class__.__name__, self._diskLocation
+                    )
+                )
                 self._dataFrame = pd.read_parquet(self._diskLocation)
         return self._dataFrame
 
@@ -366,3 +375,58 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         return getLinkStats(df)
+
+
+class ProcessedPersonsFile(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: OutputDataDirectory,
+        activitySimOutputData: ActivitySimRunInputDirectory,
+    ):
+        super().__init__(outputDataDirectory, activitySimOutputData)
+        self.activitySimOutputData = activitySimOutputData
+        self.indexedOn = "person_id"
+
+    def preprocess(self, df):
+        return filterPersons(df)
+
+    def load(self):
+        return self.activitySimOutputData.personsFile.file
+
+
+class MandatoryLocationsByTaz(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: OutputDataDirectory,
+        personsFile: ProcessedPersonsFile,
+    ):
+        super().__init__(outputDataDirectory, personsFile.inputDirectory)
+        self.indexedOn = "TAZ"
+        self.personsFile = personsFile
+
+    def load(self):
+        population = self.personsFile.file["TAZ"].value_counts()
+        workplaces = self.personsFile.file["work_zone_id"].value_counts()
+        workplaces = workplaces.loc[workplaces.index > 0]
+        workplaces.index.set_names("TAZ", inplace=True)
+        return pd.concat({"population": population, "jobs": workplaces}, axis=1).fillna(
+            0.0
+        )
+
+
+class ActivitySimOutputData:
+    def __init__(
+        self,
+        outputDataDirectory: OutputDataDirectory,
+        activitySimRunInputDirectory: ActivitySimRunInputDirectory,
+    ):
+        self.outputDataDirectory = outputDataDirectory
+        self.activitySimRunInputDirectory = activitySimRunInputDirectory
+
+        self.persons = ProcessedPersonsFile(
+            self.outputDataDirectory, self.activitySimRunInputDirectory
+        )
+
+        self.mandatoryLocationsByTaz = MandatoryLocationsByTaz(
+            self.outputDataDirectory, self.persons
+        )

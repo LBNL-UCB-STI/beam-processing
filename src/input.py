@@ -1,6 +1,7 @@
 import os
 
 import pandas as pd
+import numpy as np
 
 
 class InputDirectory:
@@ -53,6 +54,7 @@ class RawOutputFile:
         self, outputDirectory: InputDirectory, relativePath, index_col=None, dtype=None
     ):
         self.filePath = outputDirectory.append(relativePath)
+        self.outputDirectory = outputDirectory
         self.index_col = index_col
         self.dtype = dtype
         self.__file = None
@@ -67,9 +69,13 @@ class RawOutputFile:
         """
         if self.__file is None:
             print("Reading file from {0}".format(self.filePath))
-            self.__file = pd.read_csv(
-                self.filePath, index_col=self.index_col, dtype=None
-            )
+            try:
+                self.__file = pd.read_csv(
+                    self.filePath, index_col=self.index_col, dtype=None
+                )
+            except FileNotFoundError:
+                print("File at {0} does not exist".format(self.filePath))
+                return None
         return self.__file
 
     def isDefined(self):
@@ -237,7 +243,43 @@ class HouseholdsFile(RawOutputFile):
         super().__init__(outputDirectory, relativePath, index_col="household_id")
 
 
+class TripsFile(RawOutputFile):
+    def __init__(self, outputDirectory: InputDirectory):
+        relativePath = "final_trips.csv.gz"
+        super().__init__(outputDirectory, relativePath, index_col="trip_id")
+
+
+class ToursFile(RawOutputFile):
+    def __init__(self, outputDirectory: InputDirectory):
+        relativePath = "final_tours.csv.gz"
+        super().__init__(outputDirectory, relativePath, index_col="tours_id")
+
+
 class ActivitySimRunInputDirectory(InputDirectory):
     def __init__(self, baseFolderName: str):
         super().__init__(baseFolderName)
         self.householdsFile = HouseholdsFile(self)
+        self.personsFile = PersonsFile(self)
+        self.tripsFile = TripsFile(self)
+        self.toursFile = ToursFile(self)
+
+
+class PilatesSimRunInputDirectory(InputDirectory):
+    def __init__(
+        self,
+        baseFolderName: str,
+        years: list,
+        asimLiteIterations: int,
+        beamIterations=0,
+    ):
+        super().__init__(baseFolderName)
+        self.asimRuns = dict()
+        self.beamRuns = dict()
+        for year in years:
+            for asimLiteIteration in [-1, *np.arange(asimLiteIterations) + 1]:
+                relPath = [
+                        "activitysim",
+                        "output",
+                        "year-{0}-iteration-{1}".format(year, asimLiteIteration),
+                    ]
+                self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(self.append(relPath))

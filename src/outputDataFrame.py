@@ -22,12 +22,14 @@ from src.transformations import (
 class OutputDataFrame:
     """
     Represents an output DataFrame with basic functionality like loading and preprocessing.
-    Designed to load in and preprocess raw BEAM outputs stored in an OutputDataDirectory
+    Designed to load and preprocess raw BEAM outputs stored in an OutputDataDirectory.
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory.
+        inputDirectory (InputDirectory): The input directory associated with the output.
         _dataFrame (pd.DataFrame): Internal variable to store the loaded DataFrame.
-        indexedOn: The column to use as the index when loading data.
+        _diskLocation (str): The file location for caching the DataFrame.
+        indexedOn (str): The column to use as the index when loading data.
     """
 
     def __init__(
@@ -38,6 +40,7 @@ class OutputDataFrame:
 
         Parameters:
             outputDataDirectory (OutputDataDirectory): The output data directory.
+            inputDirectory (InputDirectory): The associated input directory.
         """
         self.outputDataDirectory = outputDataDirectory
         self.inputDirectory = inputDirectory
@@ -49,6 +52,12 @@ class OutputDataFrame:
         self.indexedOn = None
 
     def hash(self):
+        """
+        Generates a hash based on the input and class name.
+
+        Returns:
+            str: The generated hash.
+        """
         m = hashlib.md5()
         for s in (self.inputDirectory.directoryPath, self.__class__.__name__):
             m.update(s.encode())
@@ -56,9 +65,18 @@ class OutputDataFrame:
 
     @property
     def cached(self) -> bool:
+        """
+        Checks if the DataFrame is cached.
+
+        Returns:
+            bool: True if the DataFrame is cached, False otherwise.
+        """
         return os.path.exists(self._diskLocation)
 
     def clearCache(self):
+        """
+        Clears the cached DataFrame.
+        """
         if self.cached:
             os.remove(self._diskLocation)
         self._dataFrame = None
@@ -128,12 +146,33 @@ class OutputDataFrame:
         )
 
     def addMapping(self, mapping: dict, fromCol: str, toCol: str):
+        """
+        Adds a new column to the DataFrame based on a mapping.
+
+        Parameters:
+            mapping (dict): The mapping to use.
+            fromCol (str): The source column in the index.
+            toCol (str): The new column to add.
+
+        Returns:
+            pd.DataFrame: The modified DataFrame.
+        """
         self.dataFrame[toCol] = self.dataFrame.index.get_level_values(fromCol).map(
             mapping
         )
         return self.dataFrame
 
     def unstackColumn(self, col, index):
+        """
+        Unstacks a specified column based on the provided index.
+
+        Parameters:
+            col (str): The column to unstack.
+            index: The index to use.
+
+        Returns:
+            pd.DataFrame: The unstacked DataFrame.
+        """
         return self.dataFrame[col].unstack(index)
 
 
@@ -340,11 +379,32 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
 
 
 class ProcessedPersonsFile(OutputDataFrame):
+    """
+    Represents a processed persons file derived from ActivitySim output data.
+
+    This class provides functionality to load and preprocess processed persons data obtained from ActivitySim simulations.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        preprocess(df): Applies specific preprocessing steps to the input DataFrame.
+        load(): Loads the processed persons file from the ActivitySim output data directory.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
         activitySimOutputData: ActivitySimRunInputDirectory,
     ):
+        """
+        Initializes a ProcessedPersonsFile instance.
+
+        Parameters:
+            outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+            activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        """
         super().__init__(outputDataDirectory, activitySimOutputData)
         self.activitySimOutputData = activitySimOutputData
         self.indexedOn = "person_id"
@@ -357,6 +417,20 @@ class ProcessedPersonsFile(OutputDataFrame):
 
 
 class ProcessedHouseholdsFile(OutputDataFrame):
+    """
+    Represents a processed households file derived from ActivitySim output data.
+
+    This class provides functionality to load and preprocess processed households data obtained from ActivitySim simulations.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        preprocess(df): Applies specific preprocessing steps to the input DataFrame.
+        load(): Loads the processed households file from the ActivitySim output data directory.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -374,6 +448,20 @@ class ProcessedHouseholdsFile(OutputDataFrame):
 
 
 class ProcessedTripsFile(OutputDataFrame):
+    """
+    Represents a processed trips file derived from ActivitySim output data.
+
+    This class provides functionality to load and preprocess processed trips data obtained from ActivitySim simulations.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        preprocess(df): Applies specific preprocessing steps to the input DataFrame.
+        load(): Loads the processed trips file from the ActivitySim output data directory.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -391,6 +479,20 @@ class ProcessedTripsFile(OutputDataFrame):
 
 
 class ProcessedSkimsFile(OutputDataFrame):
+    """
+    Represents a processed skims file derived from Pilates output data.
+
+    This class provides functionality to load and preprocess processed skims data obtained from Pilates simulations.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        pilatesOutputData (PilatesRunInputDirectory): The Pilates output data directory.
+        indexedOn (list): The columns used as the index for the DataFrame.
+
+    Methods:
+        preprocess(df): Applies specific preprocessing steps to the input DataFrame.
+        load(): Loads the processed skims file from the Pilates output data directory.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -408,6 +510,19 @@ class ProcessedSkimsFile(OutputDataFrame):
 
 
 class MandatoryLocationsByTaz(OutputDataFrame):
+    """
+    Represents the count of mandatory locations by TAZ derived from processed persons file.
+
+    This class provides functionality to load and preprocess the count of mandatory locations by TAZ obtained from processed persons data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        personsFile (ProcessedPersonsFile): The processed persons file.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of mandatory locations by TAZ from the processed persons file.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -428,6 +543,19 @@ class MandatoryLocationsByTaz(OutputDataFrame):
 
 
 class TripModeCount(OutputDataFrame):
+    """
+    Represents the count of trip modes derived from processed trips file.
+
+    This class provides functionality to load and preprocess the count of trip modes obtained from processed trips data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        tripsFile (ProcessedTripsFile): The processed trips file.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of trip modes from the processed trips file.
+    """
     def __init__(
         self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
     ):
@@ -465,6 +593,20 @@ class TripModeCount(OutputDataFrame):
 
 
 class TripPMT(OutputDataFrame):
+    """
+    Represents the person miles traveled (PMT) for each trip mode derived from processed trips and skims files.
+
+    This class provides functionality to load and preprocess the person miles traveled (PMT) for each trip mode obtained from processed trips and skims data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        tripsFile (ProcessedTripsFile): The processed trips file.
+        skimsFile (ProcessedSkimsFile): The processed skims file.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the person miles traveled (PMT) for each trip mode from the processed trips and skims files.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -515,6 +657,19 @@ class TripPMT(OutputDataFrame):
 
 
 class TripModeCountByOrigin(TripModeCount):
+    """
+    Represents the count of trip modes by origin derived from processed trips file.
+
+    This class provides functionality to load and preprocess the count of trip modes by origin obtained from processed trips data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        tripsFile (ProcessedTripsFile): The processed trips file.
+        indexedOn (list): The columns used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of trip modes by origin from the processed trips file.
+    """
     def __init__(
         self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
     ):
@@ -523,6 +678,19 @@ class TripModeCountByOrigin(TripModeCount):
 
 
 class TripModeCountByPrimaryPurpose(TripModeCount):
+    """
+    Represents the count of trip modes by primary purpose derived from processed trips file.
+
+    This class provides functionality to load and preprocess the count of trip modes by primary purpose obtained from processed trips data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        tripsFile (ProcessedTripsFile): The processed trips file.
+        indexedOn (list): The columns used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of trip modes by primary purpose from the processed trips file.
+    """
     def __init__(
         self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
     ):
@@ -531,6 +699,20 @@ class TripModeCountByPrimaryPurpose(TripModeCount):
 
 
 class TripPMTByOrigin(TripPMT):
+    """
+    Represents the person miles traveled (PMT) for each trip mode by origin derived from processed trips and skims files.
+
+    This class provides functionality to load and preprocess the person miles traveled (PMT) for each trip mode by origin obtained from processed trips and skims data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        tripsFile (ProcessedTripsFile): The processed trips file.
+        skimsFile (ProcessedSkimsFile): The processed skims file.
+        indexedOn (list): The columns used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the person miles traveled (PMT) for each trip mode by origin from the processed trips and skims files.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -542,6 +724,20 @@ class TripPMTByOrigin(TripPMT):
 
 
 class TripPMTByPrimaryPurpose(TripPMT):
+    """
+    Represents the person miles traveled (PMT) for each trip mode by primary purpose derived from processed trips and skims files.
+
+    This class provides functionality to load and preprocess the person miles traveled (PMT) for each trip mode by primary purpose obtained from processed trips and skims data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        tripsFile (ProcessedTripsFile): The processed trips file.
+        skimsFile (ProcessedSkimsFile): The processed skims file.
+        indexedOn (list): The columns used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the person miles traveled (PMT) for each trip mode by primary purpose from the processed trips and skims files.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -553,6 +749,20 @@ class TripPMTByPrimaryPurpose(TripPMT):
 
 
 class MandatoryLocationByTazByYear(OutputDataFrame):
+    """
+    Represents the count of population and jobs by TAZ for each year derived from processed persons file.
+
+    This class provides functionality to load and preprocess the count of population and jobs by TAZ for each year obtained from processed persons data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        personsFile (ProcessedPersonsFile): The processed persons file.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of population and jobs by TAZ for each year from the processed persons file.
+    """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -564,6 +774,12 @@ class MandatoryLocationByTazByYear(OutputDataFrame):
         self.__yearToDataFrame = dict()
 
     def load(self):
+        """
+        Loads the count of population and jobs by TAZ for each year from the processed persons file.
+
+        Returns:
+            pd.DataFrame: The DataFrame containing the loaded data.
+        """
         for (yr, it), data in self.pilatesInputDict.items():
             if yr not in self.__yearToDataFrame:
                 self.__yearToDataFrame[yr] = data.mandatoryLocationsByTaz.dataFrame
@@ -571,6 +787,20 @@ class MandatoryLocationByTazByYear(OutputDataFrame):
 
 
 class TripModeCountByYear(OutputDataFrame):
+    """
+    Represents the count of trip modes for each year derived from processed trips file.
+
+    This class provides functionality to load and preprocess the count of trip modes for each year obtained from processed trips data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        pilatesRunInputDirectory (PilatesRunInputDirectory): The Pilates run input directory.
+        pilatesInputDict (Dict[Tuple[int, int], "ActivitySimRunOutputData"]): A dictionary mapping years to corresponding ActivitySimRunOutputData instances.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of trip modes for each year from the processed trips file.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -583,6 +813,12 @@ class TripModeCountByYear(OutputDataFrame):
         self.__yearToDataFrame = dict()
 
     def load(self):
+        """
+        Loads the count of trip modes for each year from the processed trips file.
+
+        Returns:
+            pd.DataFrame: The DataFrame containing the loaded data.
+        """
         for (yr, it), data in self.pilatesInputDict.items():
             if yr in self.__lastIterationPerYear:
                 if it <= self.__lastIterationPerYear[yr]:
@@ -599,6 +835,20 @@ class TripModeCountByYear(OutputDataFrame):
 
 
 class ModeVMTByYear(OutputDataFrame):
+    """
+    Represents the vehicle miles traveled (VMT) for each mode by year derived from BEAM output data.
+
+    This class provides functionality to load and preprocess the vehicle miles traveled (VMT) for each mode by year obtained from BEAM output data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        pilatesRunInputDirectory (PilatesRunInputDirectory): The Pilates run input directory.
+        pilatesInputDict (Dict[Tuple[int, int], "BeamRunOutputData"]): A dictionary mapping years to corresponding BeamRunOutputData instances.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the vehicle miles traveled (VMT) for each mode by year from the BEAM output data.
+    """
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -611,6 +861,12 @@ class ModeVMTByYear(OutputDataFrame):
         self.__yearToDataFrame = dict()
 
     def load(self):
+        """
+        Loads the vehicle miles traveled (VMT) for each mode by year from the BEAM output data.
+
+        Returns:
+            pd.DataFrame: The DataFrame containing the loaded data.
+        """
         for (yr, it), data in self.pilatesInputDict.items():
             if yr in self.__lastIterationPerYear:
                 if it <= self.__lastIterationPerYear[yr]:

@@ -273,7 +273,19 @@ class ToursFile(RawOutputFile):
 
 
 class SkimsFile(RawOutputFile):
+    """
+    Represents a skims file used in activity-based models.
+
+    Attributes:
+        (inherits attributes from RawOutputFile)
+    """
     def __init__(self, outputDirectory: InputDirectory):
+        """
+        Initializes a SkimsFile instance.
+
+        Parameters:
+            outputDirectory (InputDirectory): The output directory where the file is stored.
+        """
         relativePath = ["activitysim", "data", "data", "skims.omx"]
         # TODO: Support local files too
         loc = ".tmp/skims.omx"

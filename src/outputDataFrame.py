@@ -1,75 +1,22 @@
+import hashlib
 import os
+from typing import Dict, Tuple
 
 import pandas as pd
-import hashlib
 
 from src.input import (
-    BeamRunInputDirectory,
     InputDirectory,
-    PersonsFile,
+    BeamRunInputDirectory,
     ActivitySimRunInputDirectory,
+    PilatesRunInputDirectory,
 )
-from src.transformations import fixPathTraversals, getLinkStats, filterPersons
-
-
-class OutputDataDirectory:
-    """
-    Represents an output data directory where results of postprocessing will be saved.
-
-    Attributes:
-        path (str): The path to the output data directory.
-    """
-
-    def __init__(self, path):
-        self.path = path
-
-
-class BeamOutputData:
-    """
-    Represents output data related to a Beam run.
-
-    Attributes:
-        outputDataDirectory (OutputDataDirectory): The output data directory.
-        beamRunInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
-        pathTraversalEvents (PathTraversalEvents): Path traversal events data.
-        personEntersVehicleEvents (PersonEntersVehicleEvents): Person enters vehicle events data.
-        modeChoiceEvents (ModeChoiceEvents): Mode choice events data.
-        modeVMT (ModeVMT): Mode vehicle miles traveled data.
-        linkStatsFromPathTraversals (LinkStatsFromPathTraversals): Alternative linkstats
-    """
-
-    def __init__(
-        self,
-        outputDataDirectory: OutputDataDirectory,
-        beamRunInputDirectory: BeamRunInputDirectory,
-    ):
-        """
-        Initializes a BeamOutputData instance.
-
-        Parameters:
-            outputDataDirectory (OutputDataDirectory): The output data directory.
-            beamRunInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
-        """
-        self.outputDataDirectory = outputDataDirectory
-        self.beamRunInputDirectory = beamRunInputDirectory
-
-        self.beamRunInputDirectory.eventsFile.collectEvents(
-            ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
-        )
-
-        self.pathTraversalEvents = PathTraversalEvents(
-            self.outputDataDirectory, self.beamRunInputDirectory
-        )
-        self.personEntersVehicleEvents = PersonEntersVehicleEvents(
-            self.outputDataDirectory, self.beamRunInputDirectory
-        )
-        self.modeChoiceEvents = ModeChoiceEvents(
-            self.outputDataDirectory, self.beamRunInputDirectory
-        )
-        self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
-        self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
-            self.outputDataDirectory, self.pathTraversalEvents
-        )
+from src.transformations import (
+    fixPathTraversals,
+    getLinkStats,
+    filterPersons,
+    filterHouseholds,
+    filterTrips,
+)
 
 
 class OutputDataFrame:
@@ -84,7 +31,7 @@ class OutputDataFrame:
     """
 
     def __init__(
-        self, outputDataDirectory: OutputDataDirectory, inputDirectory: InputDirectory
+        self, outputDataDirectory: "OutputDataDirectory", inputDirectory: InputDirectory
     ):
         """
         Initializes an OutputDataFrame instance.
@@ -96,7 +43,7 @@ class OutputDataFrame:
         self.inputDirectory = inputDirectory
         self._dataFrame = None
         self._diskLocation = os.path.join(
-            self.outputDataDirectory.path,
+            ".tmp",
             self.hash() + ".parquet",
         )
         self.indexedOn = None
@@ -110,6 +57,11 @@ class OutputDataFrame:
     @property
     def cached(self) -> bool:
         return os.path.exists(self._diskLocation)
+
+    def clearCache(self):
+        if self.cached:
+            os.remove(self._diskLocation)
+        self._dataFrame = None
 
     def load(self):
         """
@@ -132,7 +84,6 @@ class OutputDataFrame:
             if not self.cached:
                 df = self.load()
                 self._dataFrame = self.preprocess(df)
-                print(self._dataFrame.dtypes)
                 self._dataFrame.to_parquet(self._diskLocation)
             else:
                 print(
@@ -170,9 +121,20 @@ class OutputDataFrame:
         Saves the DataFrame to a CSV file in the output data directory.
         """
         name = self.__class__.__name__
+        if not os.path.exists(self.outputDataDirectory.path):
+            os.makedirs(self.outputDataDirectory.path)
         self.dataFrame.to_csv(
             os.path.join(self.outputDataDirectory.path, name + ".csv")
         )
+
+    def addMapping(self, mapping: dict, fromCol: str, toCol: str):
+        self.dataFrame[toCol] = self.dataFrame.index.get_level_values(fromCol).map(
+            mapping
+        )
+        return self.dataFrame
+
+    def unstackColumn(self, col, index):
+        return self.dataFrame[col].unstack(index)
 
 
 class PathTraversalEvents(OutputDataFrame):
@@ -186,7 +148,7 @@ class PathTraversalEvents(OutputDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         beamInputDirectory: BeamRunInputDirectory,
     ):
         """
@@ -222,7 +184,7 @@ class PathTraversalEvents(OutputDataFrame):
         if "PathTraversal" in self.beamInputDirectory.eventsFile.eventTypes:
             df = self.beamInputDirectory.eventsFile.eventTypes["PathTraversal"]
         else:
-            df = self.beamInputDirectory.eventsFile.file
+            df = self.beamInputDirectory.eventsFile.file()
             df = df.loc[df["type"] == "PathTraversal", :].dropna(axis=1, how="all")
         df.index.name = "event_id"
         return df
@@ -239,7 +201,7 @@ class PersonEntersVehicleEvents(OutputDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         beamInputDirectory: BeamRunInputDirectory,
     ):
         """
@@ -263,7 +225,7 @@ class PersonEntersVehicleEvents(OutputDataFrame):
         if "PersonEntersVehicle" in self.beamInputDirectory.eventsFile.eventTypes:
             df = self.beamInputDirectory.eventsFile.eventTypes["PersonEntersVehicle"]
         else:
-            df = self.beamInputDirectory.eventsFile.file
+            df = self.beamInputDirectory.eventsFile.file()
             df = df.loc[df["type"] == "PersonEntersVehicle", :].dropna(
                 axis=1, how="all"
             )
@@ -282,7 +244,7 @@ class ModeChoiceEvents(OutputDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         beamInputDirectory: BeamRunInputDirectory,
     ):
         super().__init__(outputDataDirectory, beamInputDirectory)
@@ -293,7 +255,7 @@ class ModeChoiceEvents(OutputDataFrame):
         if "ModeChoice" in self.beamInputDirectory.eventsFile.eventTypes:
             df = self.beamInputDirectory.eventsFile.eventTypes["ModeChoice"]
         else:
-            df = self.beamInputDirectory.eventsFile.file
+            df = self.beamInputDirectory.eventsFile.file()
             df = df.loc[df["type"] == "ModeChoice", :].dropna(axis=1, how="all")
         df.index.name = "event_id"
         return df
@@ -310,7 +272,7 @@ class ModeVMT(OutputDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         pathTraversalEvents: PathTraversalEvents,
     ):
         """
@@ -349,7 +311,7 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         pathTraversalEvents: PathTraversalEvents,
     ):
         """
@@ -380,7 +342,7 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
 class ProcessedPersonsFile(OutputDataFrame):
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         activitySimOutputData: ActivitySimRunInputDirectory,
     ):
         super().__init__(outputDataDirectory, activitySimOutputData)
@@ -391,13 +353,64 @@ class ProcessedPersonsFile(OutputDataFrame):
         return filterPersons(df)
 
     def load(self):
-        return self.activitySimOutputData.personsFile.file
+        return self.activitySimOutputData.personsFile.file()
+
+
+class ProcessedHouseholdsFile(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        activitySimOutputData: ActivitySimRunInputDirectory,
+    ):
+        super().__init__(outputDataDirectory, activitySimOutputData)
+        self.activitySimOutputData = activitySimOutputData
+        self.indexedOn = "household_id"
+
+    def preprocess(self, df):
+        return filterHouseholds(df)
+
+    def load(self):
+        return self.activitySimOutputData.personsFile.file()
+
+
+class ProcessedTripsFile(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        activitySimOutputData: ActivitySimRunInputDirectory,
+    ):
+        super().__init__(outputDataDirectory, activitySimOutputData)
+        self.activitySimOutputData = activitySimOutputData
+        self.indexedOn = "trip_id"
+
+    def preprocess(self, df):
+        return filterTrips(df)
+
+    def load(self):
+        return self.activitySimOutputData.tripsFile.file()
+
+
+class ProcessedSkimsFile(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesOutputData: PilatesRunInputDirectory,
+    ):
+        super().__init__(outputDataDirectory, pilatesOutputData)
+        self.pilatesOutputData = pilatesOutputData
+        self.indexedOn = ["Origin", "Destination"]
+
+    def preprocess(self, df):
+        return df
+
+    def load(self):
+        return self.pilatesOutputData.skims.file()
 
 
 class MandatoryLocationsByTaz(OutputDataFrame):
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
+        outputDataDirectory: "OutputDataDirectory",
         personsFile: ProcessedPersonsFile,
     ):
         super().__init__(outputDataDirectory, personsFile.inputDirectory)
@@ -405,28 +418,209 @@ class MandatoryLocationsByTaz(OutputDataFrame):
         self.personsFile = personsFile
 
     def load(self):
-        population = self.personsFile.file["TAZ"].value_counts()
-        workplaces = self.personsFile.file["work_zone_id"].value_counts()
+        population = self.personsFile.dataFrame["TAZ"].value_counts().astype(int)
+        workplaces = self.personsFile.dataFrame["work_zone_id"].value_counts()
         workplaces = workplaces.loc[workplaces.index > 0]
         workplaces.index.set_names("TAZ", inplace=True)
         return pd.concat({"population": population, "jobs": workplaces}, axis=1).fillna(
-            0.0
+            0
         )
 
 
-class ActivitySimOutputData:
+class TripModeCount(OutputDataFrame):
+    def __init__(
+        self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
+    ):
+        super().__init__(outputDataDirectory, tripsFile.inputDirectory)
+        self.indexedOn = "trip_mode"
+        self.tripsFile = tripsFile
+        self.indices = ["trip_mode"]
+
+    def load(self):
+        mapping = {
+            "DRIVEALONEPAY": "SOV",
+            "DRIVEALONEFREE": "SOV",
+            "SHARED2PAY": "HOV",
+            "SHARED2FREE": "HOV",
+            "WALK": "WALK",
+            "SHARED3PAY": "HOV",
+            "SHARED3FREE": "HOV",
+            "DRIVE_LOC": "DRIVE_TRANSIT",
+            "DRIVE_HVY": "DRIVE_TRANSIT",
+            "DRIVE_LRF": "DRIVE_TRANSIT",
+            "DRIVE_COM": "DRIVE_TRANSIT",
+            "WALK_LOC": "WALK_TRANSIT",
+            "WALK_HVY": "WALK_TRANSIT",
+            "WALK_LRF": "WALK_TRANSIT",
+            "WALK_COM": "WALK_TRANSIT",
+            "TAXI": "TNC",
+            "TNC_SINGLE": "TNC",
+            "TNC_SHARED": "TNC",
+        }
+        return (
+            self.tripsFile.dataFrame.replace({"trip_mode": mapping})
+            .value_counts(self.indices, normalize=False)
+            .to_frame("count")
+        )
+
+
+class TripPMT(OutputDataFrame):
     def __init__(
         self,
-        outputDataDirectory: OutputDataDirectory,
-        activitySimRunInputDirectory: ActivitySimRunInputDirectory,
+        outputDataDirectory: "OutputDataDirectory",
+        tripsFile: ProcessedTripsFile,
+        skimsFile: ProcessedSkimsFile,
     ):
-        self.outputDataDirectory = outputDataDirectory
-        self.activitySimRunInputDirectory = activitySimRunInputDirectory
+        super().__init__(outputDataDirectory, tripsFile.inputDirectory)
+        self.indexedOn = "trip_mode"
+        self.tripsFile = tripsFile
+        self.skimsFile = skimsFile
+        self.indices = ["trip_mode"]
 
-        self.persons = ProcessedPersonsFile(
-            self.outputDataDirectory, self.activitySimRunInputDirectory
+    def load(self):
+        mapping = {
+            "DRIVEALONEPAY": "SOV",
+            "DRIVEALONEFREE": "SOV",
+            "SHARED2PAY": "HOV",
+            "SHARED2FREE": "HOV",
+            "WALK": "WALK",
+            "SHARED3PAY": "HOV",
+            "SHARED3FREE": "HOV",
+            "DRIVE_LOC": "DRIVE_TRANSIT",
+            "DRIVE_HVY": "DRIVE_TRANSIT",
+            "DRIVE_LRF": "DRIVE_TRANSIT",
+            "DRIVE_COM": "DRIVE_TRANSIT",
+            "WALK_LOC": "WALK_TRANSIT",
+            "WALK_HVY": "WALK_TRANSIT",
+            "WALK_LRF": "WALK_TRANSIT",
+            "WALK_COM": "WALK_TRANSIT",
+            "TAXI": "TNC",
+            "TNC_SINGLE": "TNC",
+            "TNC_SHARED": "TNC",
+        }
+        self.tripsFile.dataFrame["distanceInMiles"] = (
+            self.skimsFile.dataFrame["DistanceMiles"]
+            .reindex(
+                pd.MultiIndex.from_frame(
+                    self.tripsFile.dataFrame[["origin", "destination"]]
+                ).values
+            )
+            .values
+        )
+        return (
+            self.tripsFile.dataFrame.replace({"trip_mode": mapping})
+            .groupby(self.indices)
+            .agg({"distanceInMiles": "sum"})
         )
 
-        self.mandatoryLocationsByTaz = MandatoryLocationsByTaz(
-            self.outputDataDirectory, self.persons
-        )
+
+class TripModeCountByOrigin(TripModeCount):
+    def __init__(
+        self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
+    ):
+        super().__init__(outputDataDirectory, tripsFile)
+        self.indices = ["trip_mode", "origin"]
+
+
+class TripModeCountByPrimaryPurpose(TripModeCount):
+    def __init__(
+        self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
+    ):
+        super().__init__(outputDataDirectory, tripsFile)
+        self.indices = ["trip_mode", "primary_purpose"]
+
+
+class TripPMTByOrigin(TripPMT):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        tripsFile: ProcessedTripsFile,
+        skimsFile: ProcessedSkimsFile,
+    ):
+        super().__init__(outputDataDirectory, tripsFile, skimsFile)
+        self.indices = ["trip_mode", "origin"]
+
+
+class TripPMTByPrimaryPurpose(TripPMT):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        tripsFile: ProcessedTripsFile,
+        skimsFile: ProcessedSkimsFile,
+    ):
+        super().__init__(outputDataDirectory, tripsFile, skimsFile)
+        self.indices = ["trip_mode", "primary_purpose"]
+
+
+class MandatoryLocationByTazByYear(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr not in self.__yearToDataFrame:
+                self.__yearToDataFrame[yr] = data.mandatoryLocationsByTaz.dataFrame
+        return pd.concat(self.__yearToDataFrame, names=["Year", "TAZ"])
+
+
+class TripModeCountByYear(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it <= self.__lastIterationPerYear[yr]:
+                    continue
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for (yr, it), data in self.pilatesInputDict.items():
+            if self.__lastIterationPerYear[yr] == it:
+                self.__yearToDataFrame[yr] = data.tripModeCount.dataFrame
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame)
+        else:
+            return pd.DataFrame
+
+
+class ModeVMTByYear(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it <= self.__lastIterationPerYear[yr]:
+                    continue
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for (yr, it), data in self.pilatesInputDict.items():
+            if self.__lastIterationPerYear[yr] == it:
+                self.__yearToDataFrame[yr] = data.modeVMT.dataFrame
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame)
+        else:
+            return pd.DataFrame()

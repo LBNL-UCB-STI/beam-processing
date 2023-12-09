@@ -2,6 +2,9 @@ import os
 
 import pandas as pd
 import numpy as np
+import geopandas as gpd
+import openmatrix as omx
+import urllib.request
 
 
 class InputDirectory:
@@ -51,15 +54,19 @@ class RawOutputFile:
     """
 
     def __init__(
-        self, outputDirectory: InputDirectory, relativePath, index_col=None, dtype=None
+        self,
+        outputDirectory: InputDirectory,
+        relativePath,
+        index_col=None,
+        dtype=None,
+        file=None,
     ):
         self.filePath = outputDirectory.append(relativePath)
         self.outputDirectory = outputDirectory
         self.index_col = index_col
         self.dtype = dtype
-        self.__file = None
+        self.__file = file
 
-    @property
     def file(self):
         """
         Property to lazily load the file and return it.
@@ -110,7 +117,7 @@ class EventsFile(RawOutputFile):
             inputDirectory (InputDirectory): The input directory where the file is stored.
             iteration (int): The BEAM iteration number to use.
         """
-        dtypes = {"type": str, "numPassengers": "Int64"}  # Might come in handy later
+        dtypes = {"type": str, "numPassengers": "Int64", "driver": "str", "riders": "str"}
         relativePath = [
             "ITERS",
             "it.{0}".format(iteration),
@@ -246,13 +253,52 @@ class HouseholdsFile(RawOutputFile):
 class TripsFile(RawOutputFile):
     def __init__(self, outputDirectory: InputDirectory):
         relativePath = "final_trips.csv.gz"
-        super().__init__(outputDirectory, relativePath, index_col="trip_id")
+        super().__init__(
+            outputDirectory,
+            relativePath,
+            index_col="trip_id",
+            dtype={"household_id": int, "person_id": int, "tour_id": int},
+        )
 
 
 class ToursFile(RawOutputFile):
     def __init__(self, outputDirectory: InputDirectory):
         relativePath = "final_tours.csv.gz"
-        super().__init__(outputDirectory, relativePath, index_col="tours_id")
+        super().__init__(
+            outputDirectory,
+            relativePath,
+            index_col="tour_id",
+            dtype={"household_id": int, "person_id": int, "trip_id": int},
+        )
+
+
+class SkimsFile(RawOutputFile):
+    def __init__(self, outputDirectory: InputDirectory):
+        relativePath = ["activitysim", "data", "data", "skims.omx"]
+        # TODO: Support local files too
+        loc = ".tmp/skims.omx"
+        if not os.path.exists(loc):
+            url = outputDirectory.append(relativePath)
+            urllib.request.urlretrieve(url, ".tmp/skims.omx")
+        sk = omx.open_file(loc, "r")
+        distMat = np.array(sk["SOV_DIST__AM"])
+        transitTimeMat = np.array(sk["WLK_TRN_WLK_IVT__AM"])
+        distDf = (
+            pd.DataFrame(
+                distMat,
+                index=pd.Index(np.arange(1, 1455), name="Origin"),
+                columns=pd.Index(np.arange(1, 1455), name="Destination"),
+            )
+            .stack()
+            .rename("DistanceMiles")
+        ).to_frame()
+        distDf["transitTravelTimeHours"] = pd.DataFrame(
+            transitTimeMat / 100.0 / 60.0,
+            index=pd.Index(np.arange(1, 1455), name="Origin"),
+            columns=pd.Index(np.arange(1, 1455), name="Destination"),
+        ).stack()
+        super().__init__(outputDirectory, loc, file=distDf)
+        sk.close()
 
 
 class ActivitySimRunInputDirectory(InputDirectory):
@@ -264,7 +310,7 @@ class ActivitySimRunInputDirectory(InputDirectory):
         self.toursFile = ToursFile(self)
 
 
-class PilatesSimRunInputDirectory(InputDirectory):
+class PilatesRunInputDirectory(InputDirectory):
     def __init__(
         self,
         baseFolderName: str,
@@ -275,11 +321,52 @@ class PilatesSimRunInputDirectory(InputDirectory):
         super().__init__(baseFolderName)
         self.asimRuns = dict()
         self.beamRuns = dict()
+        self.skims = SkimsFile(self)
         for year in years:
             for asimLiteIteration in [-1, *np.arange(asimLiteIterations) + 1]:
                 relPath = [
-                        "activitysim",
-                        "output",
-                        "year-{0}-iteration-{1}".format(year, asimLiteIteration),
-                    ]
-                self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(self.append(relPath))
+                    "activitysim",
+                    "year-{0}-iteration-{1}".format(year, asimLiteIteration),
+                ]
+                print("Loading year {0} it {1}".format(year, asimLiteIteration))
+                self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
+                    self.append(relPath)
+                )
+                relPath = [
+                    "beam",
+                    "year-{0}-iteration-{1}".format(year, asimLiteIteration),
+                ]
+                self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
+                    self.append(relPath), beamIterations
+                )
+
+
+class Geometry:
+    def __init__(self):
+        self.region = None
+        self.crs = None
+        self.gdf = None
+        self.unit = None
+        self._path = None
+        self._inputcrs = None
+        self._gdf = None
+
+    def load(self):
+        self._gdf = gpd.read_file(self._path)
+
+    def zoneToCountyMap(self):
+        return NotImplementedError("This region is not defined yet")
+
+
+class SfBayGeometry(Geometry):
+    def __init__(self):
+        super().__init__()
+        self.region = "SFBay"
+        self.crs = "epsg:26910"
+        self.unit = "TAZ"
+        self._path = "geoms/sfbay-tazs-epsg-26910.shp"
+
+        self.load()
+
+    def zoneToCountyMap(self):
+        return self._gdf["county"].to_dict()

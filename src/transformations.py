@@ -76,12 +76,27 @@ def fixPathTraversals(PTs: pd.DataFrame):
     PTs.loc[PTs["secondaryFuelType"] == "gasoline", "gallonsGasoline"] += (
         PTs.loc[PTs["secondaryFuelType"] == "gasoline", "secondaryFuel"] * 8.3141841e-9
     )
-    PTs.drop(columns=["numPassengers", "length"], inplace=True)
+    PTs.drop(
+        columns=[
+            "numPassengers",
+            "length",
+            "type",
+            "primaryFuelLevel",
+            "secondaryFuelLevel",
+            "fromStopIndex",
+            "toStopIndex",
+            "capacity",
+            "seatingCapacity",
+            "toStopIndex",
+        ],
+        inplace=True,
+    )
     return PTs
 
 
 def filterPersons(persons: pd.DataFrame):
-    return persons.loc[:,
+    return persons.loc[
+        :,
         [
             "earning",
             "worker",
@@ -93,5 +108,44 @@ def filterPersons(persons: pd.DataFrame):
             "TAZ",
             "home_x",
             "home_y",
-        ]
+        ],
+    ].copy()
+
+
+def filterHouseholds(households: pd.DataFrame):
+    return households.loc[
+        :,
+        [
+            "recent_mover",
+            "num_workers",
+            "sf_detached",
+            "tenure",
+            "race_of_head",
+            "income",
+            "block_id",
+            "cars",
+            "hhsize",
+            "TAZ",
+            "num_drivers",
+            "num_children",
+        ],
+    ].copy()
+
+
+def filterTrips(trips: pd.DataFrame):
+    return trips.loc[
+        :,
+        [
+            "person_id",
+            "household_id",
+            "tour_id",
+            "primary_purpose",
+            "purpose",
+            "destination",
+            "origin",
+            "destination_logsum",
+            "depart",
+            "trip_mode",
+            "mode_choice_logsum",
+        ],
     ].copy()

@@ -2,9 +2,9 @@ from src import input, outputDataDirectory
 
 
 if __name__ == "__main__":
-    asimFolderName = "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-base-20231207/activitysim/year-2020-iteration-2"
+    asimFolderName = "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-base-20231211/activitysim/year-2010-iteration--1"
     directory = input.ActivitySimRunInputDirectory(asimFolderName)
-    asimOutputData = outputDataDirectory.ActivitySimOutputData(outputDataDirectory.OutputDataDirectory("output"), directory)
+    asimOutputData = outputDataDirectory.ActivitySimOutputData(outputDataDirectory.OutputDataDirectory("output"), directory, None)
     asimOutputData.mandatoryLocationsByTaz.toCsv()
 
 

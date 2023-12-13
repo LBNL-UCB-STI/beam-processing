@@ -103,10 +103,11 @@ class OutputDataFrame:
         """
         if self._dataFrame is None:
             if not self.cached:
+                # self.beamInputDirectory.eventsFile.filePath = "~/Downloads/1.events-maxtelework.csv.gz"
                 df = self.load()
                 self._dataFrame = self.preprocess(df)
                 print(
-                    "Writing {0} file from {1}".format(
+                    "Writing {0} file to {1}".format(
                         self.__class__.__name__, self._diskLocation
                     )
                 )
@@ -118,7 +119,9 @@ class OutputDataFrame:
                     )
                 )
                 try:
-                    self._dataFrame = pd.read_parquet(self._diskLocation)
+                    self._dataFrame = pd.read_parquet(
+                        self._diskLocation, engine="fastparquet"
+                    )
                 except Exception as e:
                     print(e)
                     self.clearCache()
@@ -618,8 +621,10 @@ class TAZBasedDataFrame(OutputDataFrame):
         ):
             if self.geometry is None:
                 raise AttributeError("You need to define a geometry to do this")
-            temp = temp.reset_index().merge(
-                self.geometry.gdf, left_on=self.geoIndex, right_on="taz1454"
+            temp = (
+                temp.reset_index()
+                .merge(self.geometry.gdf, left_on=self.geoIndex, right_on="taz1454")
+                .set_index(self.indexedOn)
             )
         if "county" in (aggregateBy or []):
             if "area" in (normalize or dict()).values():
@@ -632,6 +637,8 @@ class TAZBasedDataFrame(OutputDataFrame):
                         grouper.append(io)
                 else:
                     grouper.append(self.indexedOn)
+            if "TAZ" in grouper:
+                grouper.remove("TAZ")
             temp = (
                 temp.reset_index()[
                     list(outputColumns) + grouper + list(additionalColumns)
@@ -644,6 +651,7 @@ class TAZBasedDataFrame(OutputDataFrame):
             if fn == "area":
                 temp[col + "Density"] = temp[col].copy() / temp["gacres"]
                 outputColumns.add(col + "Density")
+                outputColumns.add(col)
             else:
                 raise NotImplementedError(
                     "Don't have aggregation {0} implemented yet".format(fn)
@@ -980,6 +988,64 @@ class MandatoryLocationByTazByYear(TAZBasedDataFrame):
             if yr not in self.__yearToDataFrame:
                 self.__yearToDataFrame[yr] = data.mandatoryLocationsByTaz.dataFrame
         return pd.concat(self.__yearToDataFrame, names=["Year", "TAZ"])
+
+
+class TripPMTByYear(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it <= self.__lastIterationPerYear[yr]:
+                    continue
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for (yr, it), data in self.pilatesInputDict.items():
+            if self.__lastIterationPerYear[yr] == it:
+                self.__yearToDataFrame[yr] = data.tripPMT.dataFrame
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame, names=["year", "mode"])
+        else:
+            return pd.DataFrame
+
+
+class TripPMTByCountyByYear(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it <= self.__lastIterationPerYear[yr]:
+                    continue
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for (yr, it), data in self.pilatesInputDict.items():
+            if self.__lastIterationPerYear[yr] == it:
+                self.__yearToDataFrame[yr] = data.tripPMTByOrigin.process(
+                    normalize=dict(), aggregateBy=["county"], mapping={"count": "sum"}
+                )
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame, names=["year", "county", "mode"])
+        else:
+            return pd.DataFrame
 
 
 class TripModeCountByYear(OutputDataFrame):

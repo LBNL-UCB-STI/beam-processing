@@ -401,4 +401,4 @@ class SfBayGeometry(Geometry):
         self.load()
 
     def zoneToCountyMap(self):
-        return self._gdf["county"].to_dict()
+        return self._gdf.set_index("taz1454")["county"].to_dict()

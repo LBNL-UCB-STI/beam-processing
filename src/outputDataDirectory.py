@@ -35,6 +35,8 @@ from src.outputDataFrame import (
     ModeEnergy,
     TripModeCountByCountyByYear,
     ModeEnergyByYear,
+    TripPMTByYear,
+    TripPMTByCountyByYear,
 )
 
 
@@ -197,6 +199,12 @@ class PilatesOutputData:
             self.geometry,
         )
 
+        self.tripPMTPerYear = TripPMTByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
+        self.tripPMTByCountyPerYear = TripPMTByCountyByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
         self.tripModeCountPerYear = TripModeCountByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
         )
@@ -255,7 +263,9 @@ class PilatesAnalysis:
                 self._pops[scenarioName] = data.mandatoryLocationsByTazByYear.process(
                     normalize={"population": "area", "jobs": "area"}
                 )
-        return pd.concat(self._pops)
+        return pd.concat(self._pops, names=["scenario"] + self._pops[
+                    scenarioName
+                ].index.names)
 
     @property
     def populationByCounty(self):
@@ -265,17 +275,19 @@ class PilatesAnalysis:
                     scenarioName
                 ] = data.mandatoryLocationsByTazByYear.process(
                     normalize={"population": "area", "jobs": "area"},
-                    aggregateBy=["county","year"],
+                    aggregateBy=["county", "year"],
                     mapping={"population": "sum", "jobs": "sum"},
                 )
-        return pd.concat(self._popsByCounty)
+        return pd.concat(self._popsByCounty, names=["scenario"] + self._popsByCounty[
+                    scenarioName
+                ].index.names)
 
     @property
     def tripModeCount(self):
         if len(self._modechoices) == 0:
             for scenarioName, data in self._runs.items():
                 self._modechoices[scenarioName] = data.tripModeCountPerYear.dataFrame
-        return pd.concat(self._modechoices)
+        return pd.concat(self._modechoices, names=["scenario"] + data.tripModeCountPerYear.dataFrame.index.names)
 
     @property
     def tripModeCountByCounty(self):
@@ -284,7 +296,7 @@ class PilatesAnalysis:
                 self._modeChoicesByCounty[
                     scenarioName
                 ] = data.tripModeCountByCountyPerYear.dataFrame
-        return pd.concat(self._modeChoicesByCounty)
+        return pd.concat(self._modeChoicesByCounty, names=["scenario"] + data.tripModeCountByCountyPerYear.dataFrame.index.names)
 
     @property
     def vmtByMode(self):
@@ -295,7 +307,7 @@ class PilatesAnalysis:
                 except HTTPError:
                     continue
         return pd.concat(
-            {key: val for key, val in self._modeVMT.items() if len(val) > 0}
+            {key: val for key, val in self._modeVMT.items() if len(val) > 0}, names=["scenario"] + data.modeVMTPerYear.dataFrame.index.names
         )
 
     @property
@@ -307,5 +319,5 @@ class PilatesAnalysis:
                 except HTTPError:
                     continue
         return pd.concat(
-            {key: val for key, val in self._modeEnergy.items() if len(val) > 0}
+            {key: val for key, val in self._modeEnergy.items() if len(val) > 0}, names=["scenario"] + data.modeEnergyPerYear.dataFrame.index.names
         )

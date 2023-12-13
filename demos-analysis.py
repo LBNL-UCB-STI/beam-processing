@@ -46,6 +46,7 @@ popByTaz = scenario.populationByTaz
 vmtByMode = scenario.vmtByMode
 energyByMode = scenario.energyByMode
 
+print('done')
 # OLD STUFF
 """vmtByMode.to_csv("LKSDFJSDLFKJSDF.csv")
 

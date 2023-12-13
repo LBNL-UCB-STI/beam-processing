@@ -1,4 +1,5 @@
 import os
+from typing import Iterable
 
 import pandas as pd
 import numpy as np
@@ -117,7 +118,14 @@ class EventsFile(RawOutputFile):
             inputDirectory (InputDirectory): The input directory where the file is stored.
             iteration (int): The BEAM iteration number to use.
         """
-        dtypes = {"type": str, "numPassengers": "Int64", "driver": "str", "riders": "str"}
+        dtypes = {
+            "type": str,
+            "numPassengers": "Int64",
+            "driver": "str",
+            "riders": "str",
+            "linkTravelTime": "str",
+            "links": "str",
+        }
         relativePath = [
             "ITERS",
             "it.{0}".format(iteration),
@@ -138,7 +146,12 @@ class EventsFile(RawOutputFile):
         for chunk in pd.read_csv(
             self.filePath,
             chunksize=self.__chunksize,
-            dtype={"driver": "str", "riders": "str"},
+            dtype={
+                "driver": "str",
+                "riders": "str",
+                "linkTravelTime": "str",
+                "links": "str",
+            },
         ):
             for eventType in eventTypes:
                 __listOfFrames[eventType].append(
@@ -279,6 +292,7 @@ class SkimsFile(RawOutputFile):
     Attributes:
         (inherits attributes from RawOutputFile)
     """
+
     def __init__(self, outputDirectory: InputDirectory):
         """
         Initializes a SkimsFile instance.
@@ -326,7 +340,7 @@ class PilatesRunInputDirectory(InputDirectory):
     def __init__(
         self,
         baseFolderName: str,
-        years: list,
+        years: Iterable[int],
         asimLiteIterations: int,
         beamIterations=0,
     ):
@@ -357,11 +371,17 @@ class Geometry:
     def __init__(self):
         self.region = None
         self.crs = None
-        self.gdf = None
+        self._gdf = None
         self.unit = None
         self._path = None
         self._inputcrs = None
         self._gdf = None
+
+    @property
+    def gdf(self):
+        if self._gdf is None:
+            self.load()
+        return self._gdf
 
     def load(self):
         self._gdf = gpd.read_file(self._path)

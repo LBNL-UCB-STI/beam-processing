@@ -1,6 +1,7 @@
 import urllib.request
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Iterable
 from urllib.error import HTTPError
+import pandas as pd
 
 import urllib3
 
@@ -31,6 +32,9 @@ from src.outputDataFrame import (
     TripPMTByPrimaryPurpose,
     TripModeCountByPrimaryPurpose,
     ModeVMTByYear,
+    ModeEnergy,
+    TripModeCountByCountyByYear,
+    ModeEnergyByYear,
 )
 
 
@@ -96,6 +100,7 @@ class BeamOutputData:
             self.outputDataDirectory, self.beamRunInputDirectory
         )
         self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
+        self.modeEnergy = ModeEnergy(self.outputDataDirectory, self.pathTraversalEvents)
         self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
             self.outputDataDirectory, self.pathTraversalEvents
         )
@@ -132,7 +137,7 @@ class ActivitySimOutputData:
         )
 
         self.mandatoryLocationsByTaz = MandatoryLocationsByTaz(
-            self.outputDataDirectory, self.persons
+            self.outputDataDirectory, self.persons, self.geometry
         )
         self.tripPMT = TripPMT(self.outputDataDirectory, self.trips, self.skims)
         self.tripPMTByOrigin = TripPMTByOrigin(
@@ -141,9 +146,11 @@ class ActivitySimOutputData:
         self.tripPMTByPrimaryPurpose = TripPMTByPrimaryPurpose(
             self.outputDataDirectory, self.trips, self.skims
         )
-        self.tripModeCount = TripModeCount(self.outputDataDirectory, self.trips)
+        self.tripModeCount = TripModeCount(
+            self.outputDataDirectory, self.trips, self.geometry
+        )
         self.tripModeCountByOrigin = TripModeCountByOrigin(
-            self.outputDataDirectory, self.trips
+            self.outputDataDirectory, self.trips, self.geometry
         )
         self.tripModeCountByPrimaryPurpose = TripModeCountByPrimaryPurpose(
             self.outputDataDirectory, self.trips
@@ -184,12 +191,121 @@ class PilatesOutputData:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
 
         self.mandatoryLocationsByTazByYear = MandatoryLocationByTazByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory,
+            self.pilatesRunInputDirectory,
+            self.asimRuns,
+            self.geometry,
         )
 
         self.tripModeCountPerYear = TripModeCountByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
         )
+        self.tripModeCountByCountyPerYear = TripModeCountByCountyByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
         self.modeVMTPerYear = ModeVMTByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.modeEnergyPerYear = ModeEnergyByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+
+
+class PilatesSettings:
+    def __init__(
+        self,
+        scenarioName: str,
+        path: str,
+        years: Iterable[int],
+        asimLiteIterations: int,
+        beamIterations: int,
+    ):
+        self.scenarioName = scenarioName
+        self.path = path
+        self.years = years
+        self.asimLiteIteratsions = asimLiteIterations
+        self.beamIterations = beamIterations
+
+
+class PilatesAnalysis:
+    def __init__(self, allPilatesSettings: Iterable[PilatesSettings]):
+        self.allPilatesSettings = allPilatesSettings
+        self._runs = dict()
+        for ps in self.allPilatesSettings:
+            directory = PilatesRunInputDirectory(
+                ps.path, ps.years, ps.asimLiteIteratsions, ps.beamIterations
+            )
+            self._runs[ps.scenarioName] = PilatesOutputData(
+                OutputDataDirectory("output/{0}".format(ps.scenarioName)), directory
+            )
+        self._pops = dict()
+        self._popsByCounty = dict()
+        self._modechoices = dict()
+        self._modeChoicesByCounty = dict()
+        self._pmtByCounty = dict()
+        self._modeChoiceByPurpose = dict()
+        self._pmtByPurpose = dict()
+        self._modeVMT = dict()
+        self._modeEnergy = dict()
+
+    @property
+    def populationByTaz(self):
+        if len(self._pops) == 0:
+            for scenarioName, data in self._runs.items():
+                self._pops[scenarioName] = data.mandatoryLocationsByTazByYear.process(
+                    normalize={"population": "area", "jobs": "area"}
+                )
+        return pd.concat(self._pops)
+
+    @property
+    def populationByCounty(self):
+        if len(self._popsByCounty) == 0:
+            for scenarioName, data in self._runs.items():
+                self._popsByCounty[
+                    scenarioName
+                ] = data.mandatoryLocationsByTazByYear.process(
+                    normalize={"population": "area", "jobs": "area"},
+                    aggregateBy=["county","year"],
+                    mapping={"population": "sum", "jobs": "sum"},
+                )
+        return pd.concat(self._popsByCounty)
+
+    @property
+    def tripModeCount(self):
+        if len(self._modechoices) == 0:
+            for scenarioName, data in self._runs.items():
+                self._modechoices[scenarioName] = data.tripModeCountPerYear.dataFrame
+        return pd.concat(self._modechoices)
+
+    @property
+    def tripModeCountByCounty(self):
+        if len(self._modeChoicesByCounty) == 0:
+            for scenarioName, data in self._runs.items():
+                self._modeChoicesByCounty[
+                    scenarioName
+                ] = data.tripModeCountByCountyPerYear.dataFrame
+        return pd.concat(self._modeChoicesByCounty)
+
+    @property
+    def vmtByMode(self):
+        if len(self._modeVMT) == 0:
+            for scenarioName, data in self._runs.items():
+                try:
+                    self._modeVMT[scenarioName] = data.modeVMTPerYear.dataFrame
+                except HTTPError:
+                    continue
+        return pd.concat(
+            {key: val for key, val in self._modeVMT.items() if len(val) > 0}
+        )
+
+    @property
+    def energyByMode(self):
+        if len(self._modeEnergy) == 0:
+            for scenarioName, data in self._runs.items():
+                try:
+                    self._modeEnergy[scenarioName] = data.modeEnergyPerYear.dataFrame
+                except HTTPError:
+                    continue
+        return pd.concat(
+            {key: val for key, val in self._modeEnergy.items() if len(val) > 0}
         )

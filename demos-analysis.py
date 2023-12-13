@@ -2,30 +2,52 @@ from src import input, outputDataDirectory
 import pandas as pd
 import geopandas as gpd
 
-pilatesScenarios = ["base", "max-telework", "bartsv"]
-pilatesFolderName = (
-    "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231207"
-)
-pilatesData = dict()
 
-for sc in pilatesScenarios:
-    directory = input.PilatesRunInputDirectory(
-        pilatesFolderName.format(sc), [2010, 2020], 2
-    )
-    pilatesData[sc] = outputDataDirectory.PilatesOutputData(
-        outputDataDirectory.OutputDataDirectory("output/{0}".format(sc)), directory
-    )
+# scenarioNames = ["base2010", "base", "max-telework", "bartsv", "medium-telework"]
+# years = [[2010]] + [[2010, 2020]] * 4
+# asimLiteIterations = [2] * 5
+# beamIterations = [2] * 5
+# folderNames = [
+#     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-baseyear-20231107"
+# ] + [
+#     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231211".format(
+#         n
+#     )
+#     for n in ["base", "max-telework", "bartsv", "medium-telework"]
+# ]
 
-baseYearName = (
+scenarioNames = ["base2010", "base", "max-telework", "bartsv"]
+years = [[2010]] + [[2010]] * 3
+asimLiteIterations = [2] * 4
+beamIterations = [2] * 4
+folderNames = [
     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-baseyear-20231107"
-)
-directory = input.PilatesRunInputDirectory(baseYearName, [2010], 2)
-basePilatesData = outputDataDirectory.PilatesOutputData(
-    outputDataDirectory.OutputDataDirectory("output/baseyear"), directory
-)
+] + [
+    "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231207".format(
+        n
+    )
+    for n in ["base", "max-telework", "bartsv"]
+]
 
+settings = [
+    outputDataDirectory.PilatesSettings(a, b, c, d, e)
+    for (a, b, c, d, e) in zip(
+        scenarioNames, folderNames, years, asimLiteIterations, beamIterations
+    )
+]
+settings[2].beamIterations = 1
+# settings[4].beamIterations = 1
+scenario = outputDataDirectory.PilatesAnalysis(allPilatesSettings=settings)
 
-look = basePilatesData.tripModeCountPerYear.dataFrame
+mc = scenario.tripModeCount
+mcCounty = scenario.tripModeCountByCounty
+popByCounty = scenario.populationByCounty
+popByTaz = scenario.populationByTaz
+vmtByMode = scenario.vmtByMode
+energyByMode = scenario.energyByMode
+
+# OLD STUFF
+"""vmtByMode.to_csv("LKSDFJSDLFKJSDF.csv")
 
 pops = dict()
 popsByCounty = dict()
@@ -198,4 +220,4 @@ plt.gca().get_legend().get_texts()[0].set_text("")
 plt.gca().get_legend().get_texts()[1].set_text("Bart Extension")
 plt.gca().get_legend().get_texts()[2].set_text("More Telework")
 plt.ylabel("Difference in jobs from Baseline in 2020")
-plt.gcf().tight_layout()
+plt.gcf().tight_layout()"""

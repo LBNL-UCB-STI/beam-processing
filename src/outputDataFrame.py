@@ -1,6 +1,8 @@
 import hashlib
 import os
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List, Union, Optional
+from pandas.api.types import is_numeric_dtype
+import numpy as np
 
 import pandas as pd
 
@@ -9,6 +11,7 @@ from src.input import (
     BeamRunInputDirectory,
     ActivitySimRunInputDirectory,
     PilatesRunInputDirectory,
+    Geometry,
 )
 from src.transformations import (
     fixPathTraversals,
@@ -102,14 +105,31 @@ class OutputDataFrame:
             if not self.cached:
                 df = self.load()
                 self._dataFrame = self.preprocess(df)
-                self._dataFrame.to_parquet(self._diskLocation)
+                print(
+                    "Writing {0} file from {1}".format(
+                        self.__class__.__name__, self._diskLocation
+                    )
+                )
+                self._dataFrame.to_parquet(self._diskLocation, engine="fastparquet")
             else:
                 print(
                     "Reading {0} file from {1}".format(
                         self.__class__.__name__, self._diskLocation
                     )
                 )
-                self._dataFrame = pd.read_parquet(self._diskLocation)
+                try:
+                    self._dataFrame = pd.read_parquet(self._diskLocation)
+                except Exception as e:
+                    print(e)
+                    self.clearCache()
+                    df = self.load()
+                    self._dataFrame = self.preprocess(df)
+                    print(
+                        "Writing {0} file from {1}".format(
+                            self.__class__.__name__, self._diskLocation
+                        )
+                    )
+                    self._dataFrame.to_parquet(self._diskLocation, engine="fastparquet")
         return self._dataFrame
 
     @dataFrame.setter
@@ -175,6 +195,15 @@ class OutputDataFrame:
         """
         return self.dataFrame[col].unstack(index)
 
+    # def process(
+    #     self,
+    #     normalize: Optional[str],
+    #     aggregateBy: Optional[List[str]],
+    #     mapping: Optional[Dict[str, str]],
+    # ) -> pd.DataFrame:
+    #     raise NotImplementedError("This class does not have process defined")
+    #     # return self.dataFrame
+
 
 class PathTraversalEvents(OutputDataFrame):
     """
@@ -220,11 +249,21 @@ class PathTraversalEvents(OutputDataFrame):
         Returns:
             pd.DataFrame: The loaded DataFrame.
         """
-        if "PathTraversal" in self.beamInputDirectory.eventsFile.eventTypes:
-            df = self.beamInputDirectory.eventsFile.eventTypes["PathTraversal"]
-        else:
-            df = self.beamInputDirectory.eventsFile.file()
-            df = df.loc[df["type"] == "PathTraversal", :].dropna(axis=1, how="all")
+
+        if "PathTraversal" not in self.beamInputDirectory.eventsFile.eventTypes:
+            print(
+                "Downloading events for {0} from {1}".format(
+                    self.__class__.__name__,
+                    self.beamInputDirectory.eventsFile.filePath,
+                )
+            )
+            self.beamInputDirectory.eventsFile.collectEvents(
+                ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
+            )
+        df = self.beamInputDirectory.eventsFile.eventTypes["PathTraversal"]
+        # else:
+        #     df = self.beamInputDirectory.eventsFile.file()
+        #     df = df.loc[df["type"] == "PathTraversal", :].dropna(axis=1, how="all")
         df.index.name = "event_id"
         return df
 
@@ -339,6 +378,47 @@ class ModeVMT(OutputDataFrame):
         return df
 
 
+class ModeEnergy(OutputDataFrame):
+    """
+    Represents mode vehicle miles traveled data, calculated from the PathTraversalEvents
+
+    Attributes:
+        pathTraversalEvents (PathTraversalEvents): Path traversal events data.
+        indexedOn: The column to use as the index when loading data.
+    """
+
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pathTraversalEvents: PathTraversalEvents,
+        nonTransitSample=0.1,
+    ):
+        """
+        Initializes a ModeVMT instance.
+
+        Parameters:
+            outputDataDirectory (OutputDataDirectory): The output data directory.
+            pathTraversalEvents (PathTraversalEvents): Path traversal events data.
+        """
+        super().__init__(outputDataDirectory, pathTraversalEvents.inputDirectory)
+        self.indexedOn = "pathTraversalMode"
+        self.pathTraversalEvents = pathTraversalEvents
+
+    def load(self):
+        """
+        Aggregates mode vehicle miles traveled data from the path traversal events data.
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame.
+        """
+        df = self.pathTraversalEvents.dataFrame.groupby("mode_extended").agg(
+            {"totalEnergyInJoules": "sum"}
+        )
+        df.index.name = self.indexedOn
+        df.loc[df.index.astype(str).str.startswith("car"), :] *= 10
+        return df
+
+
 class LinkStatsFromPathTraversals(OutputDataFrame):
     """
     Alternative linkstats file, calculated from the PathTraversalEvents
@@ -393,6 +473,7 @@ class ProcessedPersonsFile(OutputDataFrame):
         preprocess(df): Applies specific preprocessing steps to the input DataFrame.
         load(): Loads the processed persons file from the ActivitySim output data directory.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -431,6 +512,7 @@ class ProcessedHouseholdsFile(OutputDataFrame):
         preprocess(df): Applies specific preprocessing steps to the input DataFrame.
         load(): Loads the processed households file from the ActivitySim output data directory.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -462,6 +544,7 @@ class ProcessedTripsFile(OutputDataFrame):
         preprocess(df): Applies specific preprocessing steps to the input DataFrame.
         load(): Loads the processed trips file from the ActivitySim output data directory.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -493,6 +576,7 @@ class ProcessedSkimsFile(OutputDataFrame):
         preprocess(df): Applies specific preprocessing steps to the input DataFrame.
         load(): Loads the processed skims file from the Pilates output data directory.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -509,7 +593,65 @@ class ProcessedSkimsFile(OutputDataFrame):
         return self.pilatesOutputData.skims.file()
 
 
-class MandatoryLocationsByTaz(OutputDataFrame):
+class TAZBasedDataFrame(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        inputDirectory: InputDirectory,
+        geometry: Optional[Geometry],
+    ):
+        super().__init__(outputDataDirectory, inputDirectory)
+        self.geometry = geometry
+        self.geoIndex = "TAZ"  # TODO: Generalize this
+
+    def process(
+        self,
+        normalize: Optional[Dict[str, str]] = None,
+        aggregateBy: Optional[List[str]] = None,
+        mapping: Optional[Dict[str, str]] = None,
+    ) -> pd.DataFrame:
+        outputColumns = set((mapping or dict()).keys())
+        temp = self.dataFrame.copy()
+        additionalColumns = set()
+        if ("area" in (normalize or dict()).values()) | (
+            "county" in (aggregateBy or [])
+        ):
+            if self.geometry is None:
+                raise AttributeError("You need to define a geometry to do this")
+            temp = temp.reset_index().merge(
+                self.geometry.gdf, left_on=self.geoIndex, right_on="taz1454"
+            )
+        if "county" in (aggregateBy or []):
+            if "area" in (normalize or dict()).values():
+                mapping["gacres"] = "sum"
+                additionalColumns.add("gacres")
+            grouper = ["county"]
+            if self.indexedOn is not None:
+                if isinstance(self.indexedOn, list):
+                    for io in self.indexedOn:
+                        grouper.append(io)
+                else:
+                    grouper.append(self.indexedOn)
+            temp = (
+                temp.reset_index()[
+                    list(outputColumns) + grouper + list(additionalColumns)
+                ]
+                .groupby(grouper)
+                .agg(mapping)
+            )
+        for col, fn in (normalize or dict()).items():
+            outputColumns.add("gacres")
+            if fn == "area":
+                temp[col + "Density"] = temp[col].copy() / temp["gacres"]
+                outputColumns.add(col + "Density")
+            else:
+                raise NotImplementedError(
+                    "Don't have aggregation {0} implemented yet".format(fn)
+                )
+        return temp[list(outputColumns)]
+
+
+class MandatoryLocationsByTaz(TAZBasedDataFrame):
     """
     Represents the count of mandatory locations by TAZ derived from processed persons file.
 
@@ -523,13 +665,14 @@ class MandatoryLocationsByTaz(OutputDataFrame):
     Methods:
         load(): Loads the count of mandatory locations by TAZ from the processed persons file.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
         personsFile: ProcessedPersonsFile,
+        geometry: Optional[Geometry],
     ):
-        super().__init__(outputDataDirectory, personsFile.inputDirectory)
-        self.indexedOn = "TAZ"
+        super().__init__(outputDataDirectory, personsFile.inputDirectory, geometry)
         self.personsFile = personsFile
 
     def load(self):
@@ -542,7 +685,7 @@ class MandatoryLocationsByTaz(OutputDataFrame):
         )
 
 
-class TripModeCount(OutputDataFrame):
+class TripModeCount(TAZBasedDataFrame):
     """
     Represents the count of trip modes derived from processed trips file.
 
@@ -556,11 +699,17 @@ class TripModeCount(OutputDataFrame):
     Methods:
         load(): Loads the count of trip modes from the processed trips file.
     """
+
     def __init__(
-        self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        tripsFile: ProcessedTripsFile,
+        geometry: Optional[Geometry] = None,
+        indexedOn: Optional[str] = None,
     ):
-        super().__init__(outputDataDirectory, tripsFile.inputDirectory)
-        self.indexedOn = "trip_mode"
+        super().__init__(outputDataDirectory, tripsFile.inputDirectory, geometry)
+        self.geometry = geometry
+        self.indexedOn = indexedOn or "trip_mode"
         self.tripsFile = tripsFile
         self.indices = ["trip_mode"]
 
@@ -607,6 +756,7 @@ class TripPMT(OutputDataFrame):
     Methods:
         load(): Loads the person miles traveled (PMT) for each trip mode from the processed trips and skims files.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -656,6 +806,41 @@ class TripPMT(OutputDataFrame):
         )
 
 
+class MeanDistanceToWork(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        personsFile: ProcessedPersonsFile,
+        skimsFile: ProcessedSkimsFile,
+    ):
+        super().__init__(outputDataDirectory, tripsFile.inputDirectory)
+        self.indexedOn = "TAZ"
+        self.personsFile = personsFile
+        self.skimsFile = skimsFile
+        self.indices = ["TAZ"]
+
+    def load(self):
+        persons = self.personsFile.dataFrame.loc[
+            self.personsFile.dataFrame.work_zone_id > 0, ["work_zone_id", "TAZ"]
+        ]
+        persons["distanceInMiles"] = (
+            self.skimsFile.dataFrame["DistanceMiles"]
+            .reindex(
+                pd.MultiIndex.from_frame(
+                    persons.rename(
+                        columns={"TAZ": "origin", "work_zone_id": "destination"}
+                    )
+                ).values
+            )
+            .values
+        )
+        byTaz = persons.groupby(self.indices).agg(
+            {"distanceInMiles": ["sum", "length"]}
+        )["distanceInMiles"]
+        byTaz["meanDistance"] = byTaz["sum"] / byTaz["length"]
+        return byTaz["meanDistance"].to_frame()
+
+
 class TripModeCountByOrigin(TripModeCount):
     """
     Represents the count of trip modes by origin derived from processed trips file.
@@ -670,11 +855,16 @@ class TripModeCountByOrigin(TripModeCount):
     Methods:
         load(): Loads the count of trip modes by origin from the processed trips file.
     """
+
     def __init__(
-        self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        tripsFile: ProcessedTripsFile,
+        geometry: Optional[Geometry] = None,
     ):
-        super().__init__(outputDataDirectory, tripsFile)
+        super().__init__(outputDataDirectory, tripsFile, geometry)
         self.indices = ["trip_mode", "origin"]
+        self.geoIndex = "origin"
 
 
 class TripModeCountByPrimaryPurpose(TripModeCount):
@@ -691,6 +881,7 @@ class TripModeCountByPrimaryPurpose(TripModeCount):
     Methods:
         load(): Loads the count of trip modes by primary purpose from the processed trips file.
     """
+
     def __init__(
         self, outputDataDirectory: "OutputDataDirectory", tripsFile: ProcessedTripsFile
     ):
@@ -713,6 +904,7 @@ class TripPMTByOrigin(TripPMT):
     Methods:
         load(): Loads the person miles traveled (PMT) for each trip mode by origin from the processed trips and skims files.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -721,6 +913,7 @@ class TripPMTByOrigin(TripPMT):
     ):
         super().__init__(outputDataDirectory, tripsFile, skimsFile)
         self.indices = ["trip_mode", "origin"]
+        self.geoIndex = "origin"
 
 
 class TripPMTByPrimaryPurpose(TripPMT):
@@ -738,6 +931,7 @@ class TripPMTByPrimaryPurpose(TripPMT):
     Methods:
         load(): Loads the person miles traveled (PMT) for each trip mode by primary purpose from the processed trips and skims files.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -748,7 +942,7 @@ class TripPMTByPrimaryPurpose(TripPMT):
         self.indices = ["trip_mode", "primary_purpose"]
 
 
-class MandatoryLocationByTazByYear(OutputDataFrame):
+class MandatoryLocationByTazByYear(TAZBasedDataFrame):
     """
     Represents the count of population and jobs by TAZ for each year derived from processed persons file.
 
@@ -768,10 +962,12 @@ class MandatoryLocationByTazByYear(OutputDataFrame):
         outputDataDirectory: "OutputDataDirectory",
         pilatesRunInputDirectory: PilatesRunInputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
+        geometry: Geometry,
     ):
-        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory, geometry)
         self.pilatesInputDict = pilatesInputDict
         self.__yearToDataFrame = dict()
+        self.indexedOn = ["Year", "TAZ"]
 
     def load(self):
         """
@@ -801,6 +997,7 @@ class TripModeCountByYear(OutputDataFrame):
     Methods:
         load(): Loads the count of trip modes for each year from the processed trips file.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -829,7 +1026,58 @@ class TripModeCountByYear(OutputDataFrame):
             if self.__lastIterationPerYear[yr] == it:
                 self.__yearToDataFrame[yr] = data.tripModeCount.dataFrame
         if any(self.__yearToDataFrame):
-            return pd.concat(self.__yearToDataFrame)
+            return pd.concat(self.__yearToDataFrame, names=["year", "mode"])
+        else:
+            return pd.DataFrame
+
+
+class TripModeCountByCountyByYear(OutputDataFrame):
+    """
+    Represents the count of trip modes for each year derived from processed trips file.
+
+    This class provides functionality to load and preprocess the count of trip modes for each year obtained from processed trips data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        pilatesRunInputDirectory (PilatesRunInputDirectory): The Pilates run input directory.
+        pilatesInputDict (Dict[Tuple[int, int], "ActivitySimRunOutputData"]): A dictionary mapping years to corresponding ActivitySimRunOutputData instances.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the count of trip modes for each year from the processed trips file.
+    """
+
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        """
+        Loads the count of trip modes for each year from the processed trips file.
+
+        Returns:
+            pd.DataFrame: The DataFrame containing the loaded data.
+        """
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it <= self.__lastIterationPerYear[yr]:
+                    continue
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for (yr, it), data in self.pilatesInputDict.items():
+            if self.__lastIterationPerYear[yr] == it:
+                self.__yearToDataFrame[yr] = data.tripModeCountByOrigin.process(
+                    normalize=dict(), aggregateBy=["county"], mapping={"count": "sum"}
+                )
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame, names=["year", "county", "mode"])
         else:
             return pd.DataFrame
 
@@ -849,6 +1097,7 @@ class ModeVMTByYear(OutputDataFrame):
     Methods:
         load(): Loads the vehicle miles traveled (VMT) for each mode by year from the BEAM output data.
     """
+
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
@@ -869,14 +1118,87 @@ class ModeVMTByYear(OutputDataFrame):
         """
         for (yr, it), data in self.pilatesInputDict.items():
             if yr in self.__lastIterationPerYear:
-                if it <= self.__lastIterationPerYear[yr]:
-                    continue
+                if it >= self.__lastIterationPerYear[yr]:
+                    self.__lastIterationPerYear[yr] = it
             else:
                 self.__lastIterationPerYear[yr] = it
-        for (yr, it), data in self.pilatesInputDict.items():
-            if self.__lastIterationPerYear[yr] == it:
-                self.__yearToDataFrame[yr] = data.modeVMT.dataFrame
+        for yr, it in self.__lastIterationPerYear.items():
+            x = 2
+            while x > -2:
+                try:
+                    data = self.pilatesInputDict[(yr, x)]
+                    self.__yearToDataFrame[yr] = data.modeVMT.dataFrame
+                    x = -100
+                except Exception as e:
+                    print(
+                        "Can't find path traversals file for year {0} iteration {1}, trying the previous iteration".format(
+                            yr, x
+                        )
+                    )
+                    print(e)
+                    x -= 1
         if any(self.__yearToDataFrame):
-            return pd.concat(self.__yearToDataFrame)
+            return pd.concat(self.__yearToDataFrame, names=["year", "mode"])
+        else:
+            return pd.DataFrame()
+
+
+class ModeEnergyByYear(OutputDataFrame):
+    """
+    Represents the vehicle miles traveled (VMT) for each mode by year derived from BEAM output data.
+
+    This class provides functionality to load and preprocess the vehicle miles traveled (VMT) for each mode by year obtained from BEAM output data.
+
+    Attributes:
+        outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
+        pilatesRunInputDirectory (PilatesRunInputDirectory): The Pilates run input directory.
+        pilatesInputDict (Dict[Tuple[int, int], "BeamRunOutputData"]): A dictionary mapping years to corresponding BeamRunOutputData instances.
+        indexedOn (str): The column used as the index for the DataFrame.
+
+    Methods:
+        load(): Loads the vehicle miles traveled (VMT) for each mode by year from the BEAM output data.
+    """
+
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        """
+        Loads the vehicle miles traveled (VMT) for each mode by year from the BEAM output data.
+
+        Returns:
+            pd.DataFrame: The DataFrame containing the loaded data.
+        """
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it >= self.__lastIterationPerYear[yr]:
+                    self.__lastIterationPerYear[yr] = it
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for yr, it in self.__lastIterationPerYear.items():
+            x = it
+            while x > -2:
+                try:
+                    data = self.pilatesInputDict[(yr, x)]
+                    self.__yearToDataFrame[yr] = data.modeEnergy.dataFrame
+                    x = -100
+                except Exception as e:
+                    print(
+                        "Can't find path traversals file for year {0} iteration {1}, trying the previous iteration".format(
+                            yr, x
+                        )
+                    )
+                    print(e)
+                    x -= 1
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame, names=["year", "mode"])
         else:
             return pd.DataFrame()

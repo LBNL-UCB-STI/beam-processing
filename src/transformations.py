@@ -91,7 +91,7 @@ def fixPathTraversals(PTs: pd.DataFrame):
         ],
         inplace=True,
     )
-    return PTs
+    return PTs.convert_dtypes()
 
 
 def filterPersons(persons: pd.DataFrame):

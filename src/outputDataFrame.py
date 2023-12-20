@@ -12,6 +12,7 @@ from src.input import (
     ActivitySimRunInputDirectory,
     PilatesRunInputDirectory,
     Geometry,
+    LinkStatsFile,
 )
 from src.transformations import (
     fixPathTraversals,
@@ -19,6 +20,8 @@ from src.transformations import (
     filterPersons,
     filterHouseholds,
     filterTrips,
+    mergeLinkstatsWithNetwork,
+    labelNetworkWithTaz,
 )
 
 
@@ -461,6 +464,23 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
         return getLinkStats(df)
 
 
+class LabeledNetwork(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        beamOutputData: BeamRunInputDirectory,
+    ):
+        super().__init__(outputDataDirectory, beamOutputData)
+        self.beamOutputData = beamOutputData
+        self.indexedOn = "linkId"
+
+    def preprocess(self, df):
+        return labelNetworkWithTaz(df, self.beamOutputData.geometry.gdf)
+
+    def load(self):
+        return self.beamOutputData.networkFile.file()
+
+
 class ProcessedPersonsFile(OutputDataFrame):
     """
     Represents a processed persons file derived from ActivitySim output data.
@@ -617,7 +637,7 @@ class TAZBasedDataFrame(OutputDataFrame):
         temp = self.dataFrame.copy()
         additionalColumns = set()
         if ("area" in (normalize or dict()).values()) | (
-            "county" in (aggregateBy or [])
+            ("county" in (aggregateBy or [])) | ("areatype10" in (aggregateBy or []))
         ):
             if self.geometry is None:
                 raise AttributeError("You need to define a geometry to do this")
@@ -626,19 +646,24 @@ class TAZBasedDataFrame(OutputDataFrame):
                 .merge(self.geometry.gdf, left_on=self.geoIndex, right_on="taz1454")
                 .set_index(self.indexedOn)
             )
-        if "county" in (aggregateBy or []):
-            if "area" in (normalize or dict()).values():
-                mapping["gacres"] = "sum"
-                additionalColumns.add("gacres")
-            grouper = ["county"]
+        if "area" in (normalize or dict()).values():
+            mapping["gacres"] = "sum"
+            additionalColumns.add("gacres")
+        if ("county" in (aggregateBy or [])) | ("areatype10" in (aggregateBy or [])):
+            grouper = list({"county", "areatype10"}.intersection(set(aggregateBy)))
             if self.indexedOn is not None:
                 if isinstance(self.indexedOn, list):
                     for io in self.indexedOn:
                         grouper.append(io)
                 else:
                     grouper.append(self.indexedOn)
-            if "TAZ" in grouper:
-                grouper.remove("TAZ")
+            if self.geoIndex in grouper:
+                grouper.remove(self.geoIndex)
+        elif len(aggregateBy or []) > 0:
+            grouper = aggregateBy
+        else:
+            grouper = None
+        if grouper is not None:
             temp = (
                 temp.reset_index()[
                     list(outputColumns) + grouper + list(additionalColumns)
@@ -646,6 +671,7 @@ class TAZBasedDataFrame(OutputDataFrame):
                 .groupby(grouper)
                 .agg(mapping)
             )
+            print('done')
         for col, fn in (normalize or dict()).items():
             outputColumns.add("gacres")
             if fn == "area":
@@ -658,6 +684,75 @@ class TAZBasedDataFrame(OutputDataFrame):
                 )
         return temp[list(outputColumns)]
 
+
+class LabeledLinkStatsFile(TAZBasedDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        source: Union[LinkStatsFromPathTraversals, "LinkStatsFile"],
+        labeledNetwork: LabeledNetwork,
+        geometry: Geometry,
+    ):
+        self.inputDirectory = source.inputDirectory
+        self.labeledNetwork = labeledNetwork
+        assert isinstance(self.inputDirectory, BeamRunInputDirectory)
+        self.source = source
+        if isinstance(source, LinkStatsFromPathTraversals):
+            super().__init__(outputDataDirectory, source.inputDirectory, geometry)
+            # self._raw_df = source.dataFrame
+        elif isinstance(source, LinkStatsFile):
+            super().__init__(outputDataDirectory, source.inputDirectory, geometry)
+            # self._raw_df = source.file()
+        else:
+            raise TypeError(
+                "Labeling LinkStats requires either a LinkStatasFromPathTraversals or LinkStatsFile object"
+            )
+        self.geoIndex = "taz1454"
+        self.indexedOn = ["link", "hour"]
+
+    def load(self):
+        if isinstance(self.source, LinkStatsFromPathTraversals):
+            # self.source.clearCache()
+            return self.source.dataFrame
+            # self._raw_df = source.dataFrame
+        elif isinstance(self.source, LinkStatsFile):
+            return self.source.file()
+        return None
+
+    def preprocess(self, df):
+        return mergeLinkstatsWithNetwork(df, self.labeledNetwork.dataFrame)
+
+    def hash(self):
+        """
+        Generates a hash based on the input and class name. Also include whether we've generated it from linkstats or events
+
+        Returns:
+            str: The generated hash.
+        """
+        m = hashlib.md5()
+        for s in (
+            self.inputDirectory.directoryPath,
+            self.__class__.__name__,
+            self.source.__class__.__name__,
+        ):
+            m.update(s.encode())
+        return m.hexdigest()
+
+
+class TAZTrafficVolumes(TAZBasedDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        labeledLinkStatsFile: LabeledLinkStatsFile,
+        geometry: Geometry
+    ):
+        super().__init__(outputDataDirectory, labeledLinkStatsFile.inputDirectory, geometry)
+        self.labeledLinkStatsFile = labeledLinkStatsFile
+        self.geoIndex = "taz1454"
+        self.indexedOn = ["taz1454", "hour","attributeOrigType"]
+
+    def load(self):
+        return self.labeledLinkStatsFile.process(dict(), ["taz1454", "hour", "attributeOrigType"], {"VMT": "sum", "VHT": "sum"})
 
 class MandatoryLocationsByTaz(TAZBasedDataFrame):
     """

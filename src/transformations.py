@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import geopandas as gpd
 
 
 def getLinkStats(PTs: pd.DataFrame):
@@ -12,6 +13,7 @@ def getLinkStats(PTs: pd.DataFrame):
     Returns:
         pd.DataFrame: a dataframe of link volumes and travel times from the path traversal events
     """
+    PTs = PTs.head(10000)
     linksAndTravelTimes = pd.concat(
         [
             PTs.links.str.split(","),
@@ -23,6 +25,9 @@ def getLinkStats(PTs: pd.DataFrame):
     linksAndTravelTimes["linkTravelTime"] = linksAndTravelTimes[
         "linkTravelTime"
     ].astype(float)
+    linksAndTravelTimes["links"] = linksAndTravelTimes[
+        "links"
+    ].astype(pd.Int64Dtype())
     linksAndTravelTimes = linksAndTravelTimes.loc[
         linksAndTravelTimes.index.duplicated(keep="first")
     ]
@@ -41,7 +46,8 @@ def getLinkStats(PTs: pd.DataFrame):
         {"linkTravelTime": np.sum, "volume": np.sum}
     )
     print("Aggregating links into size {0}".format(grouped.index.levshape))
-    return grouped
+    grouped.index.set_names(["link", "hour"], inplace=True)
+    return grouped.rename(columns={"linkTravelTime": "traveltime"})
 
 
 def fixPathTraversals(PTs: pd.DataFrame):
@@ -149,3 +155,21 @@ def filterTrips(trips: pd.DataFrame):
             "mode_choice_logsum",
         ],
     ].copy()
+
+
+def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame):
+    gdf = gpd.GeoDataFrame(
+        network,
+        geometry=gpd.points_from_xy(
+            network["toLocationX"], network["toLocationY"], crs="epsg:26910"
+        ),
+    ).sjoin(TAZ.loc[:, ["taz1454", "geometry"]], how="left")
+    return pd.DataFrame(gdf.drop(columns=["geometry", "index_right"]))
+
+
+def mergeLinkstatsWithNetwork(linkStats: pd.DataFrame, network: pd.DataFrame):
+    linkStats['VMT'] = linkStats['volume'] * linkStats['length'] / 1609.34
+    linkStats['VHT'] = linkStats['volume'] * linkStats['traveltime'] / 3600.
+    out = linkStats.merge(network, left_on='link', right_index=True)
+    return out[list(linkStats.columns) + ['linkLength', 'linkFreeSpeed', 'linkCapacity', 'numberOfLanes',
+       'linkModes', 'attributeOrigId', 'attributeOrigType', 'taz1454']]

@@ -1,5 +1,5 @@
 import urllib.request
-from typing import Tuple, Dict, Iterable
+from typing import Tuple, Dict, Iterable, Optional
 from urllib.error import HTTPError
 import pandas as pd
 
@@ -37,6 +37,9 @@ from src.outputDataFrame import (
     ModeEnergyByYear,
     TripPMTByYear,
     TripPMTByCountyByYear,
+    LabeledLinkStatsFile,
+    LabeledNetwork,
+    TAZTrafficVolumes,
 )
 
 
@@ -70,6 +73,7 @@ class BeamOutputData:
         self,
         outputDataDirectory: OutputDataDirectory,
         beamRunInputDirectory: BeamRunInputDirectory,
+        geometry: Optional[Geometry] = Geometry(),
         collectEvents=False,
     ):
         """
@@ -86,6 +90,7 @@ class BeamOutputData:
         )
         self.logFileRequest.get_method = lambda: "HEAD"
         self.logFile = urllib.request.urlopen(self.logFileRequest)
+        self.geometry = geometry
 
         if collectEvents:
             self.beamRunInputDirectory.eventsFile.collectEvents(
@@ -106,6 +111,19 @@ class BeamOutputData:
         self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
             self.outputDataDirectory, self.pathTraversalEvents
         )
+        self.labeledNetwork = LabeledNetwork(
+            self.outputDataDirectory, self.beamRunInputDirectory
+        )
+        self.labeledLinkStatsFile = LabeledLinkStatsFile(
+            self.outputDataDirectory,
+            self.beamRunInputDirectory.linkStatsFile,
+            self.labeledNetwork,
+            self.geometry,
+        )
+        self.tazTrafficVolumes = TAZTrafficVolumes(
+            self.outputDataDirectory, self.labeledLinkStatsFile, self.geometry
+        )
+        print("dsfads")
 
 
 class ActivitySimOutputData:
@@ -114,7 +132,7 @@ class ActivitySimOutputData:
         outputDataDirectory: OutputDataDirectory,
         activitySimRunInputDirectory: ActivitySimRunInputDirectory,
         skims: ProcessedSkimsFile,
-        geometry=Geometry(),
+        geometry: Optional[Geometry] = Geometry(),
     ):
         self.outputDataDirectory = outputDataDirectory
         self.activitySimRunInputDirectory = activitySimRunInputDirectory
@@ -174,7 +192,11 @@ class PilatesOutputData:
             self.outputDataDirectory, self.pilatesRunInputDirectory
         )
         if region == "SFBay":
-            self.geometry = SfBayGeometry()
+            self.geometry = SfBayGeometry(
+                otherFiles={
+                    "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
+                }
+            )
         else:
             self.geometry = Geometry()
 
@@ -188,7 +210,9 @@ class PilatesOutputData:
 
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
-                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory)
+                self.beamRuns[(yr, it)] = BeamOutputData(
+                    outputDataDirectory, directory, self.geometry
+                )
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
 
@@ -248,6 +272,8 @@ class PilatesAnalysis:
             )
         self._pops = dict()
         self._popsByCounty = dict()
+        self._popsByRegionType = dict()
+        self._popsByCountyAndRegionType = dict()
         self._modechoices = dict()
         self._modeChoicesByCounty = dict()
         self._pmtByCounty = dict()
@@ -255,6 +281,15 @@ class PilatesAnalysis:
         self._pmtByPurpose = dict()
         self._modeVMT = dict()
         self._modeEnergy = dict()
+        """      
+        # Here's an example of how to group by county and road type
+        look = self._runs["base"].beamRuns[(2010, -1)].tazTrafficVolumes
+        look.process(
+            dict(),
+            ["county", "hour", "attributeOrigType"],
+            {"VMT": "sum", "VHT": "sum"},
+        )
+        """
 
     @property
     def populationByTaz(self):
@@ -263,9 +298,42 @@ class PilatesAnalysis:
                 self._pops[scenarioName] = data.mandatoryLocationsByTazByYear.process(
                     normalize={"population": "area", "jobs": "area"}
                 )
-        return pd.concat(self._pops, names=["scenario"] + self._pops[
+        return pd.concat(
+            self._pops, names=["scenario"] + self._pops[scenarioName].index.names
+        )
+
+    @property
+    def populationByRegionType(self):
+        if len(self._popsByRegionType) == 0:
+            for scenarioName, data in self._runs.items():
+                self._popsByRegionType[
                     scenarioName
-                ].index.names)
+                ] = data.mandatoryLocationsByTazByYear.process(
+                    normalize={"population": "area", "jobs": "area"},
+                    aggregateBy=["areatype10", "year"],
+                    mapping={"population": "sum", "jobs": "sum"},
+                )
+        return pd.concat(
+            self._popsByRegionType,
+            names=["scenario"] + self._popsByRegionType[scenarioName].index.names,
+        )
+
+    @property
+    def populationByCountyAndRegionType(self):
+        if len(self._popsByCountyAndRegionType) == 0:
+            for scenarioName, data in self._runs.items():
+                self._popsByCountyAndRegionType[
+                    scenarioName
+                ] = data.mandatoryLocationsByTazByYear.process(
+                    normalize={"population": "area", "jobs": "area"},
+                    aggregateBy=["county", "areatype10", "year"],
+                    mapping={"population": "sum", "jobs": "sum"},
+                )
+        return pd.concat(
+            self._popsByCountyAndRegionType,
+            names=["scenario"]
+            + self._popsByCountyAndRegionType[scenarioName].index.names,
+        )
 
     @property
     def populationByCounty(self):
@@ -278,16 +346,20 @@ class PilatesAnalysis:
                     aggregateBy=["county", "year"],
                     mapping={"population": "sum", "jobs": "sum"},
                 )
-        return pd.concat(self._popsByCounty, names=["scenario"] + self._popsByCounty[
-                    scenarioName
-                ].index.names)
+        return pd.concat(
+            self._popsByCounty,
+            names=["scenario"] + self._popsByCounty[scenarioName].index.names,
+        )
 
     @property
     def tripModeCount(self):
         if len(self._modechoices) == 0:
             for scenarioName, data in self._runs.items():
                 self._modechoices[scenarioName] = data.tripModeCountPerYear.dataFrame
-        return pd.concat(self._modechoices, names=["scenario"] + data.tripModeCountPerYear.dataFrame.index.names)
+        return pd.concat(
+            self._modechoices,
+            names=["scenario"] + data.tripModeCountPerYear.dataFrame.index.names,
+        )
 
     @property
     def tripModeCountByCounty(self):
@@ -296,7 +368,11 @@ class PilatesAnalysis:
                 self._modeChoicesByCounty[
                     scenarioName
                 ] = data.tripModeCountByCountyPerYear.dataFrame
-        return pd.concat(self._modeChoicesByCounty, names=["scenario"] + data.tripModeCountByCountyPerYear.dataFrame.index.names)
+        return pd.concat(
+            self._modeChoicesByCounty,
+            names=["scenario"]
+            + data.tripModeCountByCountyPerYear.dataFrame.index.names,
+        )
 
     @property
     def vmtByMode(self):
@@ -307,7 +383,8 @@ class PilatesAnalysis:
                 except HTTPError:
                     continue
         return pd.concat(
-            {key: val for key, val in self._modeVMT.items() if len(val) > 0}, names=["scenario"] + data.modeVMTPerYear.dataFrame.index.names
+            {key: val for key, val in self._modeVMT.items() if len(val) > 0},
+            names=["scenario"] + data.modeVMTPerYear.dataFrame.index.names,
         )
 
     @property
@@ -319,5 +396,6 @@ class PilatesAnalysis:
                 except HTTPError:
                     continue
         return pd.concat(
-            {key: val for key, val in self._modeEnergy.items() if len(val) > 0}, names=["scenario"] + data.modeEnergyPerYear.dataFrame.index.names
+            {key: val for key, val in self._modeEnergy.items() if len(val) > 0},
+            names=["scenario"] + data.modeEnergyPerYear.dataFrame.index.names,
         )

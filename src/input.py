@@ -1,5 +1,8 @@
+import hashlib
 import os
-from typing import Iterable
+from io import BytesIO, StringIO
+from typing import Iterable, Optional, Dict
+from zipfile import ZipFile
 
 import pandas as pd
 import numpy as np
@@ -51,22 +54,22 @@ class RawOutputFile:
         filePath (str): The path to the output file.
         index_col: Optional parameter for specifying the column to use as the row labels.
         dtype: Optional parameter for specifying column data types.
-        __file: Internal variable to store the loaded file.
+        _file: Internal variable to store the loaded file.
     """
 
     def __init__(
         self,
-        outputDirectory: InputDirectory,
+        inputDirectory: InputDirectory,
         relativePath,
         index_col=None,
         dtype=None,
         file=None,
     ):
-        self.filePath = outputDirectory.append(relativePath)
-        self.outputDirectory = outputDirectory
+        self.filePath = inputDirectory.append(relativePath)
+        self.inputDirectory = inputDirectory
         self.index_col = index_col
         self.dtype = dtype
-        self.__file = file
+        self._file = file
 
     def file(self):
         """
@@ -75,16 +78,16 @@ class RawOutputFile:
         Returns:
             pd.DataFrame: The loaded DataFrame.
         """
-        if self.__file is None:
+        if self._file is None:
             print("Reading file from {0}".format(self.filePath))
             try:
-                self.__file = pd.read_csv(
+                self._file = pd.read_csv(
                     self.filePath, index_col=self.index_col, dtype=None
                 )
             except FileNotFoundError:
                 print("File at {0} does not exist".format(self.filePath))
                 return None
-        return self.__file
+        return self._file
 
     def isDefined(self):
         """
@@ -93,13 +96,62 @@ class RawOutputFile:
         Returns:
             bool: True if the file is defined, False otherwise.
         """
-        return self.__file is not None
+        return self._file is not None
 
     def clean(self):
         """
         Resets the internal file variable, allowing for reloading the file or clearing memory.
         """
-        self.__file = None
+        self._file = None
+
+
+class Geometry:
+    def __init__(self):
+        self.region = None
+        self.crs = None
+        self._gdf = None
+        self.unit = None
+        self._path = None
+        self._inputcrs = None
+        self._gdf = None
+        self._index = None
+        self._otherFiles = dict()
+
+    @property
+    def gdf(self):
+        if self._gdf is None:
+            self.load()
+        return self._gdf
+
+    def load(self):
+        self._gdf = gpd.read_file(self._path)
+        for filepath, key in self._otherFiles.items():
+            otherFile = pd.read_csv(filepath)
+            self._gdf = pd.merge(
+                self._gdf, otherFile, left_on=self._index, right_on=key
+            )
+
+    def zoneToCountyMap(self):
+        return NotImplementedError("This region is not defined yet")
+
+
+class SfBayGeometry(Geometry):
+    def __init__(self, otherFiles: Optional[Dict[str, str]] = None):
+        super().__init__()
+        self.region = "SFBay"
+        self.crs = "epsg:26910"
+        self.unit = "TAZ"
+        self._index = "taz1454"
+        self._path = "geoms/sfbay-tazs-epsg-26910.shp"
+        self._otherFiles = otherFiles
+
+        self.load()
+
+    def zoneToCountyMap(self):
+        return self._gdf.set_index(self._index)["county"].to_dict()
+
+    def zoneToRegionTypeMap(self):
+        return self._gdf.set_index(self._index)["areatype10"].to_dict()
 
 
 class EventsFile(RawOutputFile):
@@ -172,12 +224,12 @@ class LinkStatsFile(RawOutputFile):
         (inherits attributes from OutputFile)
     """
 
-    def __init__(self, outputDirectory: InputDirectory, iteration: int):
+    def __init__(self, inputDirectory: InputDirectory, iteration: int):
         """
         Initializes a LinkStatsFile instance.
 
         Parameters:
-            outputDirectory (InputDirectory): The output directory where the file will be stored.
+            inputDirectory (InputDirectory): The output directory where the file will be stored.
             iteration (int): The iteration number.
         """
         relativePath = [
@@ -185,7 +237,7 @@ class LinkStatsFile(RawOutputFile):
             "it.{0}".format(iteration),
             "{0}.linkstats.csv.gz".format(iteration),
         ]
-        super().__init__(outputDirectory, relativePath, index_col=["link", "hour"])
+        super().__init__(inputDirectory, relativePath, index_col=["link", "hour"])
 
 
 class NetworkFile(RawOutputFile):
@@ -196,15 +248,17 @@ class NetworkFile(RawOutputFile):
         (inherits attributes from OutputFile)
     """
 
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory, geometry: Geometry):
         """
         Initializes a Network instance.
 
         Parameters:
-            outputDirectory (InputDirectory): The output directory where the file will be stored.
+            inputDirectory (InputDirectory): The output directory where the file will be stored.
+            :param geometry:
         """
         relativePath = "network.csv.gz"
-        super().__init__(outputDirectory, relativePath, index_col="linkId")
+        super().__init__(inputDirectory, relativePath, index_col="linkId")
+        self.crs = geometry.crs
 
 
 class InputPlansFile(RawOutputFile):
@@ -215,15 +269,15 @@ class InputPlansFile(RawOutputFile):
         (inherits attributes from OutputFile)
     """
 
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory):
         """
         Initializes an InputPlansFile instance.
 
         Parameters:
-            outputDirectory (InputDirectory): The output directory where the file will be stored.
+            inputDirectory (InputDirectory): The output directory where the file will be stored.
         """
         relativePath = "plans.csv.gz"
-        super().__init__(outputDirectory, relativePath)
+        super().__init__(inputDirectory, relativePath)
 
 
 class BeamRunInputDirectory(InputDirectory):
@@ -237,7 +291,12 @@ class BeamRunInputDirectory(InputDirectory):
         (inherits attributes from InputDirectory)
     """
 
-    def __init__(self, baseFolderName: str, numberOfIterations: int = 0):
+    def __init__(
+        self,
+        baseFolderName: str,
+        numberOfIterations: int = 0,
+        geometry: Optional[Geometry] = None,
+    ):
         """
         Initializes a BeamRunInputDirectory instance.
 
@@ -249,25 +308,85 @@ class BeamRunInputDirectory(InputDirectory):
         self.eventsFile = EventsFile(self, numberOfIterations)
         self.inputPlansFile = InputPlansFile(self)
         self.linkStatsFile = LinkStatsFile(self, numberOfIterations)
+        self.geometry = geometry
+        self.networkFile = NetworkFile(self, geometry)
+
+
+class TripUtilitiesFiles(RawOutputFile):
+    def __init__(self, inputDirectory: InputDirectory):
+        relativePath = "trip_mode_choice.zip"
+        super().__init__(inputDirectory, relativePath, index_col="person_id")
+        # self._file = None
+
+    def __hash(self):
+        """
+        Generates a hash based on the input and class name. Also include whether we've generated it from linkstats or events
+
+        Returns:
+            str: The generated hash.
+        """
+        m = hashlib.md5()
+        for s in (
+            self.inputDirectory.directoryPath,
+            self.__class__.__name__
+        ):
+            m.update(s.encode())
+        return m.hexdigest()
+
+    def file(self):
+        """
+        Property to lazily load the file and return it.
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame.
+        """
+        if self._file is None:
+            print("Reading files from {0}".format(self.filePath))
+            out = dict()
+            folderName = os.path.join(".tmp",self.__hash())
+            if not os.path.exists(folderName):
+                os.makedirs(folderName)
+            try:
+                with urllib.request.urlopen(self.filePath) as zipresp:
+                    with ZipFile(BytesIO(zipresp.read())) as zfile:
+                        # zfile.extractall(".tmp/")
+                        for ls in zfile.filelist:
+                            if ls.filename.endswith("utilities.csv"):
+                                if not os.path.exists(os.path.join(folderName, ls.filename)):
+                                    zfile.extract(ls.filename, folderName)
+                                # with zfile.open(
+                                #     "trip_mode_choice/1370833_raw.csv"
+                                # ) as myfile:
+                                groupName = ls.filename.split("/")[1].split("_")[0]
+                                df = pd.read_csv(os.path.join(folderName, ls.filename), index_col="trip_id")
+                                out[groupName] = df
+                self._file = pd.concat(out, names=["division", "trip_id"])
+                # self._file = pd.read_csv(
+                #     self.filePath, index_col=self.index_col, dtype=None
+                # )
+            except FileNotFoundError:
+                print("File at {0} does not exist".format(self.filePath))
+                return None
+        return self._file
 
 
 class PersonsFile(RawOutputFile):
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory):
         relativePath = "persons.csv.gz"
-        super().__init__(outputDirectory, relativePath, index_col="person_id")
+        super().__init__(inputDirectory, relativePath, index_col="person_id")
 
 
 class HouseholdsFile(RawOutputFile):
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory):
         relativePath = "households.csv.gz"
-        super().__init__(outputDirectory, relativePath, index_col="household_id")
+        super().__init__(inputDirectory, relativePath, index_col="household_id")
 
 
 class TripsFile(RawOutputFile):
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory):
         relativePath = "final_trips.csv.gz"
         super().__init__(
-            outputDirectory,
+            inputDirectory,
             relativePath,
             index_col="trip_id",
             dtype={"household_id": int, "person_id": int, "tour_id": int},
@@ -275,10 +394,10 @@ class TripsFile(RawOutputFile):
 
 
 class ToursFile(RawOutputFile):
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory):
         relativePath = "final_tours.csv.gz"
         super().__init__(
-            outputDirectory,
+            inputDirectory,
             relativePath,
             index_col="tour_id",
             dtype={"household_id": int, "person_id": int, "trip_id": int},
@@ -293,18 +412,18 @@ class SkimsFile(RawOutputFile):
         (inherits attributes from RawOutputFile)
     """
 
-    def __init__(self, outputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: InputDirectory):
         """
         Initializes a SkimsFile instance.
 
         Parameters:
-            outputDirectory (InputDirectory): The output directory where the file is stored.
+            inputDirectory (InputDirectory): The output directory where the file is stored.
         """
         relativePath = ["activitysim", "data", "data", "skims.omx"]
         # TODO: Support local files too
         loc = ".tmp/skims.omx"
         if not os.path.exists(loc):
-            url = outputDirectory.append(relativePath)
+            url = inputDirectory.append(relativePath)
             urllib.request.urlretrieve(url, ".tmp/skims.omx")
         sk = omx.open_file(loc, "r")
         distMat = np.array(sk["SOV_DIST__AM"])
@@ -323,17 +442,20 @@ class SkimsFile(RawOutputFile):
             index=pd.Index(np.arange(1, 1455), name="Origin"),
             columns=pd.Index(np.arange(1, 1455), name="Destination"),
         ).stack()
-        super().__init__(outputDirectory, loc, file=distDf)
+        super().__init__(inputDirectory, loc, file=distDf)
         sk.close()
 
 
 class ActivitySimRunInputDirectory(InputDirectory):
-    def __init__(self, baseFolderName: str):
+    def __init__(self, baseFolderName: str, geometry=Geometry()):
         super().__init__(baseFolderName)
         self.householdsFile = HouseholdsFile(self)
         self.personsFile = PersonsFile(self)
         self.tripsFile = TripsFile(self)
         self.toursFile = ToursFile(self)
+        self.tripUtilitiesFiles = TripUtilitiesFiles(self)
+        f = self.tripUtilitiesFiles.file()
+        self.geometry = geometry
 
 
 class PilatesRunInputDirectory(InputDirectory):
@@ -343,11 +465,20 @@ class PilatesRunInputDirectory(InputDirectory):
         years: Iterable[int],
         asimLiteIterations: int,
         beamIterations=0,
+        region="SFBay",
     ):
         super().__init__(baseFolderName)
         self.asimRuns = dict()
         self.beamRuns = dict()
         self.skims = SkimsFile(self)
+        if region == "SFBay":
+            self.geometry = SfBayGeometry(
+                otherFiles={
+                    "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
+                }
+            )
+        else:
+            self.geometry = Geometry()
         for year in years:
             for asimLiteIteration in [-1, *np.arange(asimLiteIterations) + 1]:
                 relPath = [
@@ -356,49 +487,12 @@ class PilatesRunInputDirectory(InputDirectory):
                 ]
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))
                 self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
-                    self.append(relPath)
+                    self.append(relPath), self.geometry
                 )
                 relPath = [
                     "beam",
                     "year-{0}-iteration-{1}".format(year, asimLiteIteration),
                 ]
                 self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
-                    self.append(relPath), beamIterations
+                    self.append(relPath), beamIterations, self.geometry
                 )
-
-
-class Geometry:
-    def __init__(self):
-        self.region = None
-        self.crs = None
-        self._gdf = None
-        self.unit = None
-        self._path = None
-        self._inputcrs = None
-        self._gdf = None
-
-    @property
-    def gdf(self):
-        if self._gdf is None:
-            self.load()
-        return self._gdf
-
-    def load(self):
-        self._gdf = gpd.read_file(self._path)
-
-    def zoneToCountyMap(self):
-        return NotImplementedError("This region is not defined yet")
-
-
-class SfBayGeometry(Geometry):
-    def __init__(self):
-        super().__init__()
-        self.region = "SFBay"
-        self.crs = "epsg:26910"
-        self.unit = "TAZ"
-        self._path = "geoms/sfbay-tazs-epsg-26910.shp"
-
-        self.load()
-
-    def zoneToCountyMap(self):
-        return self._gdf.set_index("taz1454")["county"].to_dict()

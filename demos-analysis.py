@@ -1,33 +1,35 @@
 from src import input, outputDataDirectory
 import pandas as pd
 import geopandas as gpd
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 
 
-# scenarioNames = ["base2010", "base", "max-telework", "bartsv", "medium-telework"]
-# years = [[2010]] + [[2010, 2020]] * 4
-# asimLiteIterations = [2] * 5
-# beamIterations = [2] * 5
-# folderNames = [
-#     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-baseyear-20231107"
-# ] + [
-#     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231211".format(
-#         n
-#     )
-#     for n in ["base", "max-telework", "bartsv", "medium-telework"]
-# ]
-
-scenarioNames = ["base2010", "base", "max-telework", "bartsv"]
-years = [[2010]] + [[2010]] * 3
-asimLiteIterations = [2] * 4
-beamIterations = [2] * 4
+scenarioNames = ["base2010", "base", "max-telework", "bartsv", "medium-telework"]
+years = [[2010]] + [[2010]] * 4
+asimLiteIterations = [2] * 5
+beamIterations = [2] * 5
 folderNames = [
     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-baseyear-20231107"
 ] + [
-    "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231207".format(
+    "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231211".format(
         n
     )
-    for n in ["base", "max-telework", "bartsv"]
+    for n in ["base", "max-telework", "bartsv", "medium-telework"]
 ]
+
+# scenarioNames = ["base2010", "base", "max-telework", "bartsv"]
+# years = [[2010]] + [[2010]] * 3
+# asimLiteIterations = [2] * 4
+# beamIterations = [2] * 4
+# folderNames = [
+#     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-baseyear-20231107"
+# ] + [
+#     "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-{0}-20231207".format(
+#         n
+#     )
+#     for n in ["base", "max-telework", "bartsv"]
+# ]
 
 settings = [
     outputDataDirectory.PilatesSettings(a, b, c, d, e)
@@ -36,13 +38,17 @@ settings = [
     )
 ]
 settings[2].beamIterations = 1
-# settings[4].beamIterations = 1
+settings[4].beamIterations = 1
 scenario = outputDataDirectory.PilatesAnalysis(allPilatesSettings=settings)
 
+popByTaz = scenario.populationByTaz
+popByRegionType = scenario.populationByRegionType
+popByRegionAndCountyType = scenario.populationByCountyAndRegionType
 mc = scenario.tripModeCount
 mcCounty = scenario.tripModeCountByCounty
 popByCounty = scenario.populationByCounty
-popByTaz = scenario.populationByTaz
+
+
 vmtByMode = scenario.vmtByMode
 energyByMode = scenario.energyByMode
 

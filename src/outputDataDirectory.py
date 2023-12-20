@@ -40,6 +40,7 @@ from src.outputDataFrame import (
     LabeledLinkStatsFile,
     LabeledNetwork,
     TAZTrafficVolumes,
+    PersonTrips,
 )
 
 
@@ -106,6 +107,11 @@ class BeamOutputData:
         self.modeChoiceEvents = ModeChoiceEvents(
             self.outputDataDirectory, self.beamRunInputDirectory
         )
+
+        self.personTrips = PersonTrips(
+            self.outputDataDirectory, self.beamRunInputDirectory
+        )
+
         self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
         self.modeEnergy = ModeEnergy(self.outputDataDirectory, self.pathTraversalEvents)
         self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(

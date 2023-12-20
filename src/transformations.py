@@ -25,9 +25,7 @@ def getLinkStats(PTs: pd.DataFrame):
     linksAndTravelTimes["linkTravelTime"] = linksAndTravelTimes[
         "linkTravelTime"
     ].astype(float)
-    linksAndTravelTimes["links"] = linksAndTravelTimes[
-        "links"
-    ].astype(pd.Int64Dtype())
+    linksAndTravelTimes["links"] = linksAndTravelTimes["links"].astype(pd.Int64Dtype())
     linksAndTravelTimes = linksAndTravelTimes.loc[
         linksAndTravelTimes.index.duplicated(keep="first")
     ]
@@ -157,6 +155,37 @@ def filterTrips(trips: pd.DataFrame):
     ].copy()
 
 
+def doInexus(dfs: dict):
+    def processPTs(events):
+        events.rename(columns={"mode": "modeBEAM"}, inplace=True)
+
+        isPublicVehicleTraversal = events.driver.str.contains("Agent")
+        privateVehicleEvents = events.loc[~isPublicVehicleTraversal, :]
+        privateVehicleEvents["IDMerged"] = privateVehicleEvents["driver"].copy()
+        privateVehicleEvents["IDMerged"] = pd.to_numeric(privateVehicleEvents.IDMerged)
+
+        publicVehicleEvents = events.loc[isPublicVehicleTraversal, :]
+        publicVehicleEvents = publicVehicleEvents.loc[
+            ~publicVehicleEvents.riders.isna(), :
+        ]
+        publicVehicleEvents["riderList"] = publicVehicleEvents["riders"].str.split(":")
+        publicVehicleEvents = publicVehicleEvents.explode("riderList")
+        publicVehicleEvents["IDMerged"] = publicVehicleEvents["riderList"].copy()
+        publicVehicleEvents.drop(columns=["riderList"], inplace=True)
+        publicVehicleEvents["IDMerged"] = pd.to_numeric(publicVehicleEvents.IDMerged)
+
+        return (
+            pd.concat([publicVehicleEvents, privateVehicleEvents], axis=0)
+            .sort_values(["IDMerged", "time"])
+            .reset_index(drop=True)
+        )
+
+    def processPEVs(events):
+        return 1
+
+    return pd.DataFrame()
+
+
 def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame):
     gdf = gpd.GeoDataFrame(
         network,
@@ -168,8 +197,19 @@ def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame):
 
 
 def mergeLinkstatsWithNetwork(linkStats: pd.DataFrame, network: pd.DataFrame):
-    linkStats['VMT'] = linkStats['volume'] * linkStats['length'] / 1609.34
-    linkStats['VHT'] = linkStats['volume'] * linkStats['traveltime'] / 3600.
-    out = linkStats.merge(network, left_on='link', right_index=True)
-    return out[list(linkStats.columns) + ['linkLength', 'linkFreeSpeed', 'linkCapacity', 'numberOfLanes',
-       'linkModes', 'attributeOrigId', 'attributeOrigType', 'taz1454']]
+    linkStats["VMT"] = linkStats["volume"] * linkStats["length"] / 1609.34
+    linkStats["VHT"] = linkStats["volume"] * linkStats["traveltime"] / 3600.0
+    out = linkStats.merge(network, left_on="link", right_index=True)
+    return out[
+        list(linkStats.columns)
+        + [
+            "linkLength",
+            "linkFreeSpeed",
+            "linkCapacity",
+            "numberOfLanes",
+            "linkModes",
+            "attributeOrigId",
+            "attributeOrigType",
+            "taz1454",
+        ]
+    ]

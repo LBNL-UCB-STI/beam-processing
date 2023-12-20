@@ -3,6 +3,8 @@ import os
 from io import BytesIO, StringIO
 from typing import Iterable, Optional, Dict
 from zipfile import ZipFile
+from tqdm import tqdm
+import shutil
 
 import pandas as pd
 import numpy as np
@@ -326,10 +328,7 @@ class TripUtilitiesFiles(RawOutputFile):
             str: The generated hash.
         """
         m = hashlib.md5()
-        for s in (
-            self.inputDirectory.directoryPath,
-            self.__class__.__name__
-        ):
+        for s in (self.inputDirectory.directoryPath, self.__class__.__name__):
             m.update(s.encode())
         return m.hexdigest()
 
@@ -343,31 +342,54 @@ class TripUtilitiesFiles(RawOutputFile):
         if self._file is None:
             print("Reading files from {0}".format(self.filePath))
             out = dict()
-            folderName = os.path.join(".tmp",self.__hash())
+            folderName = os.path.join(".tmp", self.__hash())
             if not os.path.exists(folderName):
                 os.makedirs(folderName)
             try:
                 with urllib.request.urlopen(self.filePath) as zipresp:
                     with ZipFile(BytesIO(zipresp.read())) as zfile:
                         # zfile.extractall(".tmp/")
-                        for ls in zfile.filelist:
+                        for ls in tqdm(zfile.filelist):
                             if ls.filename.endswith("utilities.csv"):
-                                if not os.path.exists(os.path.join(folderName, ls.filename)):
+                                if not os.path.exists(
+                                    os.path.join(folderName, ls.filename)
+                                ):
                                     zfile.extract(ls.filename, folderName)
                                 # with zfile.open(
                                 #     "trip_mode_choice/1370833_raw.csv"
                                 # ) as myfile:
                                 groupName = ls.filename.split("/")[1].split("_")[0]
-                                df = pd.read_csv(os.path.join(folderName, ls.filename), index_col="trip_id")
+                                df = pd.read_csv(
+                                    os.path.join(folderName, ls.filename),
+                                    index_col="trip_id",
+                                )
                                 out[groupName] = df
                 self._file = pd.concat(out, names=["division", "trip_id"])
                 # self._file = pd.read_csv(
                 #     self.filePath, index_col=self.index_col, dtype=None
                 # )
+                print("Removing temporary unzipped files")
+                shutil.rmtree(folderName)
             except FileNotFoundError:
                 print("File at {0} does not exist".format(self.filePath))
                 return None
         return self._file
+
+    def getInitialDivisionMapping(self):
+        trip_id_to_division = (
+            self.file()
+            .index.to_frame()
+            .reset_index("division", drop=True)["division"]
+            .to_dict()
+        )
+        return trip_id_to_division
+
+    def split(self, trip_id_to_division) -> (Dict[str, pd.DataFrame], Dict[int, str]):
+        utils = self.file().reset_index()
+        utils["division_fixed"] = utils["division"].astype(int).map(trip_id_to_division)
+        gb = utils.groupby("division_fixed")
+        division_to_utils = {a: b for a, b in gb}
+        return division_to_utils, trip_id_to_division
 
 
 class PersonsFile(RawOutputFile):
@@ -375,11 +397,28 @@ class PersonsFile(RawOutputFile):
         relativePath = "persons.csv.gz"
         super().__init__(inputDirectory, relativePath, index_col="person_id")
 
+    def split(self, person_id_to_division) -> (Dict[str, pd.DataFrame], Dict[int, str]):
+        households = self.file()["household_id"].reset_index()
+        households["division"] = households["person_id"].map(person_id_to_division)
+        household_id_to_division = households.set_index("person_id")[
+            "division"
+        ].to_dict()
+        gb = self.file().groupby(person_id_to_division)
+        division_to_persons = {f: d for f, d in gb}
+        return division_to_persons, household_id_to_division
+
 
 class HouseholdsFile(RawOutputFile):
     def __init__(self, inputDirectory: InputDirectory):
         relativePath = "households.csv.gz"
         super().__init__(inputDirectory, relativePath, index_col="household_id")
+
+    def split(
+        self, household_id_to_division
+    ) -> (Dict[str, pd.DataFrame], Dict[int, str]):
+        gb = self.file().groupby(household_id_to_division)
+        division_to_households = {f: d for f, d in gb}
+        return division_to_households, dict()
 
 
 class TripsFile(RawOutputFile):
@@ -391,6 +430,54 @@ class TripsFile(RawOutputFile):
             index_col="trip_id",
             dtype={"household_id": int, "person_id": int, "tour_id": int},
         )
+
+    def split(self, trip_id_to_division) -> (Dict[str, pd.DataFrame], Dict[int, str]):
+        persons = self.file()["person_id"].reset_index()
+        persons["division"] = persons["trip_id"].map(trip_id_to_division)
+
+        divToPersons = persons.groupby("division").agg({"person_id": "unique"})
+        tempMap = dict()
+        tempMap[divToPersons.iloc[0].name] = set(divToPersons.iloc[0].person_id)
+        for div, ps in divToPersons.iterrows():
+            setPersons = set(ps.person_id)
+            unassigned = True
+            for finalDiv, finalPersons in tempMap.items():
+                if not setPersons.isdisjoint(finalPersons):
+                    finalPersons.update(setPersons)
+                    unassigned = False
+            if unassigned:
+                tempMap[div] = setPersons
+
+        outputMap = dict()
+        outputMap[divToPersons.iloc[0].name] = tempMap[divToPersons.iloc[0].name]
+        for div, setPersons in tempMap.items():
+            unassigned = True
+            for finalDiv, finalPersons in outputMap.items():
+                if not setPersons.isdisjoint(finalPersons):
+                    finalPersons.update(setPersons)
+                    unassigned = False
+            if unassigned:
+                outputMap[div] = setPersons
+
+        person_id_to_division = (
+            pd.concat(
+                [
+                    pd.MultiIndex.from_product(
+                        [[a], list(b)], names=["division", "person_id"]
+                    ).to_frame(False)
+                    for a, b in outputMap.items()
+                ]
+            )
+            .set_index("person_id")
+            .to_dict()["division"]
+        )
+
+        trips = self.file()
+        trips["division_new"] = trips["person_id"].map(person_id_to_division)
+        gb = trips.groupby("division_new")
+        division_to_trips = {f: d for f, d in gb}
+        trip_id_to_division_new = trips["division_new"].to_dict()
+        return division_to_trips, person_id_to_division, trip_id_to_division_new
 
 
 class ToursFile(RawOutputFile):
@@ -454,8 +541,26 @@ class ActivitySimRunInputDirectory(InputDirectory):
         self.tripsFile = TripsFile(self)
         self.toursFile = ToursFile(self)
         self.tripUtilitiesFiles = TripUtilitiesFiles(self)
-        f = self.tripUtilitiesFiles.file()
         self.geometry = geometry
+
+    def getSplitData(self):
+        trip_id_to_division_raw = self.tripUtilitiesFiles.getInitialDivisionMapping()
+        (
+            division_to_trips,
+            person_id_to_division,
+            trip_id_to_division,
+        ) = self.tripsFile.split(trip_id_to_division_raw)
+        division_to_utilities, _ = self.tripUtilitiesFiles.split(trip_id_to_division)
+        division_to_persons, household_id_to_division = self.personsFile.split(
+            person_id_to_division
+        )
+        division_to_households, _ = self.householdsFile.split(household_id_to_division)
+        return (
+            division_to_utilities,
+            division_to_trips,
+            division_to_persons,
+            division_to_households,
+        )
 
 
 class PilatesRunInputDirectory(InputDirectory):

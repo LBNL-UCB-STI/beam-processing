@@ -22,6 +22,7 @@ from src.transformations import (
     filterTrips,
     mergeLinkstatsWithNetwork,
     labelNetworkWithTaz,
+    doInexus,
 )
 
 
@@ -271,6 +272,63 @@ class PathTraversalEvents(OutputDataFrame):
         #     df = self.beamInputDirectory.eventsFile.file()
         #     df = df.loc[df["type"] == "PathTraversal", :].dropna(axis=1, how="all")
         df.index.name = "event_id"
+        return df
+
+
+class PersonTrips(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        beamInputDirectory: BeamRunInputDirectory,
+    ):
+        super().__init__(outputDataDirectory, beamInputDirectory)
+        self.beamInputDirectory = beamInputDirectory
+        self.indexedOn = "trip_id"
+
+    def preprocess(self, df):
+        """
+        Preprocesses the path traversal events DataFrame.
+
+        Parameters:
+            df (pd.DataFrame): The DataFrame to preprocess.
+
+        Returns:
+            pd.DataFrame: The preprocessed DataFrame.
+        """
+        return doInexus(df)
+
+    def load(self):
+        """
+        Loads path traversal events data from the Beam input directory, dropping unnecessary columns
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame.
+        """
+        requiredTables = {
+            "PathTraversal",
+            "PersonEntersVehicle",
+            "ModeChoice",
+            "ParkingEvent",
+            "actend",
+            "actstart",
+            "PersonCost",
+            "Replanning",
+            "ParkingEvent",
+            "TeleportationEvent",
+        }
+        if not requiredTables.issubset(self.beamInputDirectory.eventsFile.eventTypes):
+            print(
+                "Downloading events for {0} from {1}".format(
+                    self.__class__.__name__,
+                    self.beamInputDirectory.eventsFile.filePath,
+                )
+            )
+            self.beamInputDirectory.eventsFile.collectEvents(list(requiredTables))
+        df = {
+            tab: self.beamInputDirectory.eventsFile.eventTypes[tab]
+            for tab in list(requiredTables)
+        }
+
         return df
 
 
@@ -671,7 +729,7 @@ class TAZBasedDataFrame(OutputDataFrame):
                 .groupby(grouper)
                 .agg(mapping)
             )
-            print('done')
+            print("done")
         for col, fn in (normalize or dict()).items():
             outputColumns.add("gacres")
             if fn == "area":
@@ -744,15 +802,22 @@ class TAZTrafficVolumes(TAZBasedDataFrame):
         self,
         outputDataDirectory: "OutputDataDirectory",
         labeledLinkStatsFile: LabeledLinkStatsFile,
-        geometry: Geometry
+        geometry: Geometry,
     ):
-        super().__init__(outputDataDirectory, labeledLinkStatsFile.inputDirectory, geometry)
+        super().__init__(
+            outputDataDirectory, labeledLinkStatsFile.inputDirectory, geometry
+        )
         self.labeledLinkStatsFile = labeledLinkStatsFile
         self.geoIndex = "taz1454"
-        self.indexedOn = ["taz1454", "hour","attributeOrigType"]
+        self.indexedOn = ["taz1454", "hour", "attributeOrigType"]
 
     def load(self):
-        return self.labeledLinkStatsFile.process(dict(), ["taz1454", "hour", "attributeOrigType"], {"VMT": "sum", "VHT": "sum"})
+        return self.labeledLinkStatsFile.process(
+            dict(),
+            ["taz1454", "hour", "attributeOrigType"],
+            {"VMT": "sum", "VHT": "sum"},
+        )
+
 
 class MandatoryLocationsByTaz(TAZBasedDataFrame):
     """

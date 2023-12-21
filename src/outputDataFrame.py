@@ -97,6 +97,13 @@ class OutputDataFrame:
         """
         pass
 
+    def _write(self, obj):
+        assert isinstance(obj, pd.DataFrame)
+        obj.to_parquet(self._diskLocation, engine="fastparquet")
+
+    def _read(self):
+        return pd.read_parquet(self._diskLocation, engine="fastparquet")
+
     @property
     def dataFrame(self) -> pd.DataFrame:
         """
@@ -115,7 +122,8 @@ class OutputDataFrame:
                         self.__class__.__name__, self._diskLocation
                     )
                 )
-                self._dataFrame.to_parquet(self._diskLocation, engine="fastparquet")
+                self._write(self._dataFrame)
+                # self._dataFrame.to_parquet(self._diskLocation, engine="fastparquet")
             else:
                 print(
                     "Reading {0} file from {1}".format(
@@ -123,9 +131,7 @@ class OutputDataFrame:
                     )
                 )
                 try:
-                    self._dataFrame = pd.read_parquet(
-                        self._diskLocation, engine="fastparquet"
-                    )
+                    self._dataFrame = self._read()
                 except Exception as e:
                     print(e)
                     self.clearCache()
@@ -284,6 +290,33 @@ class PersonTrips(OutputDataFrame):
         super().__init__(outputDataDirectory, beamInputDirectory)
         self.beamInputDirectory = beamInputDirectory
         self.indexedOn = "trip_id"
+        self.__requiredTables = {
+            "PathTraversal",
+            "PersonEntersVehicle",
+            "ModeChoice",
+            "ParkingEvent",
+            "actend",
+            "actstart",
+            "PersonCost",
+            "Replanning",
+            "ParkingEvent",
+            "TeleportationEvent",
+        }
+
+    def _write(self, obj):
+        assert isinstance(obj, dict)
+        loc = self._diskLocation.replace('.parquet','')
+        for grp, df in obj.items():
+            fileLoc = "{0}_{1}.parquet".format(loc, grp)
+            df.to_parquet(fileLoc, engine="fastparquet")
+
+    def _read(self):
+        out = dict()
+        loc = self._diskLocation.replace('.parquet','')
+        for tab in list(self.__requiredTables):
+            fileLoc = "{0}_{1}.parquet".format(loc, tab)
+            out[tab] = pd.read_parquet(fileLoc, engine="fastparquet")
+        return out
 
     def preprocess(self, df):
         """
@@ -304,29 +337,17 @@ class PersonTrips(OutputDataFrame):
         Returns:
             pd.DataFrame: The loaded DataFrame.
         """
-        requiredTables = {
-            "PathTraversal",
-            "PersonEntersVehicle",
-            "ModeChoice",
-            "ParkingEvent",
-            "actend",
-            "actstart",
-            "PersonCost",
-            "Replanning",
-            "ParkingEvent",
-            "TeleportationEvent",
-        }
-        if not requiredTables.issubset(self.beamInputDirectory.eventsFile.eventTypes):
+        if not self.__requiredTables.issubset(self.beamInputDirectory.eventsFile.eventTypes):
             print(
                 "Downloading events for {0} from {1}".format(
                     self.__class__.__name__,
                     self.beamInputDirectory.eventsFile.filePath,
                 )
             )
-            self.beamInputDirectory.eventsFile.collectEvents(list(requiredTables))
+            self.beamInputDirectory.eventsFile.collectEvents(list(self.__requiredTables))
         df = {
             tab: self.beamInputDirectory.eventsFile.eventTypes[tab]
-            for tab in list(requiredTables)
+            for tab in list(self.__requiredTables)
         }
 
         return df

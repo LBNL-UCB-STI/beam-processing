@@ -160,11 +160,11 @@ def doInexus(dfs: dict):
         events.rename(columns={"mode": "modeBEAM"}, inplace=True)
 
         isPublicVehicleTraversal = events.driver.str.contains("Agent")
-        privateVehicleEvents = events.loc[~isPublicVehicleTraversal, :]
+        privateVehicleEvents = events.loc[~isPublicVehicleTraversal, :].copy()
         privateVehicleEvents["IDMerged"] = privateVehicleEvents["driver"].copy()
         privateVehicleEvents["IDMerged"] = pd.to_numeric(privateVehicleEvents.IDMerged)
 
-        publicVehicleEvents = events.loc[isPublicVehicleTraversal, :]
+        publicVehicleEvents = events.loc[isPublicVehicleTraversal, :].copy()
         publicVehicleEvents = publicVehicleEvents.loc[
             ~publicVehicleEvents.riders.isna(), :
         ]
@@ -176,14 +176,33 @@ def doInexus(dfs: dict):
 
         return (
             pd.concat([publicVehicleEvents, privateVehicleEvents], axis=0)
-            .sort_values(["IDMerged", "time"])
+            .sort_values(["time"])
             .reset_index(drop=True)
+            .set_index("IDMerged", append=True)
+            .reorder_levels([1, 0])
+            .sort_index(level=0)
+        )
+
+    def processTeleportation(events):
+        events.rename(columns={"mode": "modeBEAM", "person": "IDMerged"}, inplace=True)
+        events["IDMerged"] = pd.to_numeric(events.IDMerged)
+        return (
+            events.sort_values(["time"])
+            .set_index("IDMerged", append=True)
+            .reorder_levels([1, 0])
+            .sort_index(level=0)
         )
 
     def processPEVs(events):
         return 1
 
-    return pd.DataFrame()
+    PTs = processPTs(dfs["PathTraversal"])
+    TEs = processTeleportation(dfs["TeleportationEvent"])
+
+    dfs['PathTraversal'] = PTs
+    dfs['TeleportationEvent'] = TEs
+
+    return dfs
 
 
 def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame):

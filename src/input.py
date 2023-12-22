@@ -155,6 +155,24 @@ class SfBayGeometry(Geometry):
     def zoneToRegionTypeMap(self):
         return self._gdf.set_index(self._index)["areatype10"].to_dict()
 
+class AustinGeometry(Geometry):
+    def __init__(self, otherFiles: Optional[Dict[str, str]] = None):
+        super().__init__()
+        self.region = "Austin"
+        self.crs = "epsg:26910"
+        self.unit = "BG"
+        self._index = "TAZ"
+        self._path = "geoms/block_group_austin_26910.shp"
+        self._otherFiles = otherFiles
+
+        self.load()
+
+    def zoneToCountyMap(self):
+        return self._gdf.set_index(self._index)["county"].to_dict()
+
+    def zoneToRegionTypeMap(self):
+        raise NotImplementedError("No regions defined for Austin")
+
 
 class EventsFile(RawOutputFile):
     """
@@ -592,6 +610,8 @@ class PilatesRunInputDirectory(InputDirectory):
                     "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
                 }
             )
+        elif region == "Austin":
+            self.geometry = AustinGeometry(otherFiles=dict())
         else:
             self.geometry = Geometry()
         for year in years:

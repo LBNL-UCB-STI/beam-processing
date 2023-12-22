@@ -202,35 +202,108 @@ def doInexus(dfs: dict):
             np.nan,
         )
         events["emissionGasoline"] = events["fuelGasoline"] * 8.3141841e-9 * 8.89e-3
-        return events
 
-    def updateMode(events):
-        events["modeBEAM_rh"] = np.where(
-            events.driver.str.contains("rideHailAgent", na=False),
-            "ride_hail",
-            events["modeBEAM"],
-        )
-        events["modeBEAM_rh"] = np.where(
-            (events["type"] == "PathTraversal")
-            & (events["modeBEAM"] == "car")
-            & (events["driver"].str.contains("rideHailAgent", na=False))
-            & (events["modeBEAM_rh_pooled"] != "nan"),
-            events["modeBEAM_rh_pooled"],
-            events["modeBEAM_rh"],
-        )
-        # We don't know if ridehail_transit is ride_hail or ride_hail_pooled
-        events["modeBEAM_rh"] = np.where(
-            (events["type"] == "PathTraversal")
-            & (events["modeBEAM"] == "car")
-            & (events["driver"].str.contains("rideHailAgent", na=False))
-            & (events["modeBEAM_rh_ride_hail_transit"] != "nan"),
-            events["modeBEAM_rh_ride_hail_transit"],
-            events["modeBEAM_rh"],
-        )
+        # Marginal fuel
+        conditions = [
+            (events["modeBEAM"] == "ride_hail_pooled"),
+            (events["modeBEAM"] == "walk_transit")
+            | (events["modeBEAM"] == "drive_transit")
+            | (events["modeBEAM"] == "ride_hail_transit")
+            | (events["modeBEAM"] == "bus")
+            | (events["modeBEAM"] == "subway")
+            | (events["modeBEAM"] == "rail")
+            | (events["modeBEAM"] == "tram")
+            | (events["modeBEAM"] == "cable_car")
+            | (events["modeBEAM"] == "bike_transit"),
+            (events["modeBEAM"] == "walk") | (events["modeBEAM"] == "bike"),
+            (events["modeBEAM"] == "ride_hail")
+            | (events["modeBEAM"] == "car")
+            | (events["modeBEAM"] == "car_hov2")
+            | (events["modeBEAM"] == "car_hov3")
+            | (events["modeBEAM"] == "hov2_teleportation")
+            | (events["modeBEAM"] == "hov3_teleportation"),
+        ]
+        choices = [
+            events["fuel_not_Food"] / events["numPassengers"],
+            0,
+            events["fuelFood"],
+            events["fuel_not_Food"],
+        ]
+        events["fuel_marginal"] = np.select(conditions, choices, default=np.nan)
 
-        # Dropping the temporary columns
-        events = events.drop(["modeBEAM_rh_pooled"], axis=1)
-        events = events.drop(["modeBEAM_rh_ride_hail_transit"], axis=1)
+        # Marginal emission
+        conditions1 = [
+            (events["modeBEAM"] == "ride_hail_pooled")
+            & (events["fuelElectricity"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail_pooled")
+            & (events["fuelGasoline"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail_pooled")
+            & (events["fuelBiodiesel"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail_pooled")
+            & (events["fuelDiesel"].notna() != 0),
+            (events["modeBEAM"] == "walk_transit")
+            | (events["modeBEAM"] == "drive_transit")
+            | (events["modeBEAM"] == "ride_hail_transit")
+            | (events["modeBEAM"] == "bus")
+            | (events["modeBEAM"] == "subway")
+            | (events["modeBEAM"] == "rail")
+            | (events["modeBEAM"] == "tram")
+            | (events["modeBEAM"] == "cable_car")
+            | (events["modeBEAM"] == "bike_transit"),
+            (events["modeBEAM"] == "walk") | (events["modeBEAM"] == "bike"),
+            (events["modeBEAM"] == "ride_hail")
+            | (events["modeBEAM"] == "car")
+            | (events["modeBEAM"] == "car_hov2")
+            | (events["modeBEAM"] == "car_hov3")
+            | (events["modeBEAM"] == "hov2_teleportation")
+            | (events["modeBEAM"] == "hov3_teleportation")
+            & (events["fuelElectricity"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail")
+            | (events["modeBEAM"] == "car")
+            | (events["modeBEAM"] == "car_hov2")
+            | (events["modeBEAM"] == "car_hov3")
+            | (events["modeBEAM"] == "hov2_teleportation")
+            | (events["modeBEAM"] == "hov3_teleportation")
+            & (events["fuelGasoline"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail")
+            | (events["modeBEAM"] == "car")
+            | (events["modeBEAM"] == "car_hov2")
+            | (events["modeBEAM"] == "car_hov3")
+            | (events["modeBEAM"] == "hov2_teleportation")
+            | (events["modeBEAM"] == "hov3_teleportation")
+            & (events["fuelBiodiesel"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail")
+            | (events["modeBEAM"] == "car")
+            | (events["modeBEAM"] == "car_hov2")
+            | (events["modeBEAM"] == "car_hov3")
+            | (events["modeBEAM"] == "hov2_teleportation")
+            | (events["modeBEAM"] == "hov3_teleportation")
+            & (events["fuelDiesel"].notna() != 0),
+            (events["modeBEAM"] == "ride_hail")
+            | (events["modeBEAM"] == "car")
+            | (events["modeBEAM"] == "car_hov2")
+            | (events["modeBEAM"] == "car_hov3")
+            | (events["modeBEAM"] == "hov2_teleportation")
+            | (events["modeBEAM"] == "hov3_teleportation")
+            & (events["fuelFood"].notna() != 0),
+        ]
+
+        choices1 = [
+            events["emissionElectricity"] / events["numPassengers"],
+            events["emissionGasoline"] / events["numPassengers"],
+            events["emissionBiodiesel"] / events["numPassengers"],
+            events["emissionDiesel"] / events["numPassengers"],
+            0,
+            events["emissionFood"],
+            events["emissionElectricity"],
+            events["emissionGasoline"],
+            events["emissionBiodiesel"],
+            events["emissionDiesel"],
+            events["emissionFood"],
+        ]
+
+        events["emission_marginal"] = np.select(conditions1, choices1, default=np.nan)
+
         return events
 
     def updateDuration(events):
@@ -329,6 +402,21 @@ def doInexus(dfs: dict):
         publicVehicleEvents["IDMerged"] = publicVehicleEvents["riderList"].copy()
         publicVehicleEvents.drop(columns=["riderList"], inplace=True)
         publicVehicleEvents["IDMerged"] = pd.to_numeric(publicVehicleEvents.IDMerged)
+        publicVehicleEvents["transit_bus"] = np.where(
+            publicVehicleEvents["modeBEAM"] == "bus", 1, 0
+        )
+        publicVehicleEvents["transit_subway"] = np.where(
+            publicVehicleEvents["modeBEAM"] == "subway", 1, 0
+        )
+        publicVehicleEvents["transit_tram"] = np.where(
+            publicVehicleEvents["modeBEAM"] == "tram", 1, 0
+        )
+        publicVehicleEvents["transit_rail"] = np.where(
+            publicVehicleEvents["modeBEAM"] == "rail", 1, 0
+        )
+        publicVehicleEvents["transit_cable_car"] = np.where(
+            publicVehicleEvents["modeBEAM"] == "cable_car", 1, 0
+        )
 
         pathTraversals = (
             pd.concat([publicVehicleEvents, privateVehicleEvents], axis=0)
@@ -408,6 +496,7 @@ def doInexus(dfs: dict):
             .reorder_levels([1, 0])
             .sort_index(level=0)
         )
+        events["replanning_status"] = 1
 
         events["eventOrder"] = (
             events.index.to_frame(index=False)
@@ -558,7 +647,7 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
     #            'actEndTime': "sum",
     aggfunc = {
         "duration_travelling": "sum",
-        'cost_BEAM': "sum",
+        "cost_BEAM": "sum",
         # 'actStartType': "sum",
         # 'actEndType': "sum",
         "duration_walking": "sum",
@@ -578,22 +667,22 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
         "vehicle": lambda x: ", ".join(set(x.dropna().astype(str))),
         "numPassengers": lambda x: ", ".join(list(x.dropna().astype(str))),
         "distance_mode_choice": "sum",
-        # 'replanning_status': "sum",
+        "replanning_status": "sum",
         "reason": lambda x: ", ".join(list(x.dropna().astype(str))),
         "parkingType": lambda x: ", ".join(list(x.dropna().astype(str))),
-        # 'transit_bus': "sum",
-        # 'transit_subway': "sum",
-        # 'transit_tram': "sum",
-        # 'transit_cable_car': "sum",
+        "transit_bus": "sum",
+        "transit_subway": "sum",
+        "transit_tram": "sum",
+        "transit_cable_car": "sum",
         # 'ride_hail_pooled': "sum",
-        # 'transit_rail': "sum",
+        "transit_rail": "sum",
         "fuelFood": "sum",
         "fuelElectricity": "sum",
         "fuelBiodiesel": "sum",
         "fuelDiesel": "sum",
         "fuel_not_Food": "sum",
         "fuelGasoline": "sum",
-        # 'fuel_marginal': "sum",
+        'fuel_marginal': "sum",
         # 'BlockGroupStart': 'first',
         "startX": "first",
         "startY": "first",
@@ -615,7 +704,7 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
         "emissionDiesel": "sum",
         "emissionGasoline": "sum",
         "emissionBiodiesel": "sum",
-        # 'emission_marginal': "sum"
+        'emission_marginal': "sum"
     }
     p_cols = [
         "age",

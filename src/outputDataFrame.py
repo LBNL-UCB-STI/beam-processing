@@ -380,6 +380,12 @@ class PersonTrips(OutputDataFrame):
     def chunk(self, personIdToChunk):
         unSplitData = self.dataFrame
         outputData = dict()
+        try:
+            print(unSplitDf.index.get_level_values("IDMerged").astype(int).map(
+                personIdToChunk
+            ).head(2))
+        except:
+            print("DSTSTS")
         for fileType in ["ModeChoice", "PathTraversal", "TeleportationEvent", "PersonCost", "Replanning", "ParkingEvent"]:
             print("Breaking {0} file into chunks".format(fileType))
             unSplitDf = unSplitData[fileType]

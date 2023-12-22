@@ -296,6 +296,8 @@ class PilatesOutputData:
             )
             return combined
 
+        out = combineChunk(list(person_id_to_division.values())[0])
+
         processed_list = Parallel(n_jobs=cpu_count() // 2)(
             delayed(combineChunk)(ch) for ch in mc.keys()
         )

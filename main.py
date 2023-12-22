@@ -8,7 +8,7 @@ if __name__ == "__main__":
     )
     directory = input.PilatesRunInputDirectory(pilatesFolderName, [2010, 2015, 2017], 3)
     pilatesData = outputDataDirectory.PilatesOutputData(
-        outputDataDirectory.OutputDataDirectory("output"), directory
+        outputDataDirectory.OutputDataDirectory("output/ausin-2010-base"), directory
     )
 
     pilatesData.congestionInfoByYear.toCsv()

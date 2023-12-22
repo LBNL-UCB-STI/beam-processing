@@ -509,11 +509,11 @@ def doInexus(dfs: dict):
 
     def processParking(events):
         events = events.rename(columns={"cost": "cost_BEAM", "driver": "IDMerged"})
-        events = events.loc[events["IDMerged"].str.isnumeric(), :]
         events = events.loc[
             ~events["IDMerged"].isna(),  # Might be duplicated
             ["IDMerged", "parkingTaz", "parkingType", "time", "type", "cost_BEAM"],
-        ].copy()
+        ]
+        events = events.loc[events["IDMerged"].str.isnumeric(), :].copy()
         events = (
             events.sort_values(["time"])
             .set_index("IDMerged", append=True)
@@ -682,7 +682,7 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
         "fuelDiesel": "sum",
         "fuel_not_Food": "sum",
         "fuelGasoline": "sum",
-        'fuel_marginal': "sum",
+        "fuel_marginal": "sum",
         # 'BlockGroupStart': 'first',
         "startX": "first",
         "startY": "first",
@@ -704,7 +704,7 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
         "emissionDiesel": "sum",
         "emissionGasoline": "sum",
         "emissionBiodiesel": "sum",
-        'emission_marginal': "sum"
+        "emission_marginal": "sum",
     }
     p_cols = [
         "age",

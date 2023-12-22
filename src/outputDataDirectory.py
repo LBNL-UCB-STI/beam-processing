@@ -43,6 +43,7 @@ from src.outputDataFrame import (
     LabeledNetwork,
     TAZTrafficVolumes,
     PersonTrips,
+    CongestionInfoByYear,
 )
 from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
@@ -249,6 +250,9 @@ class PilatesOutputData:
         self.modeEnergyPerYear = ModeEnergyByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
+        self.congestionInfoByYear = CongestionInfoByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
 
     def runInexus(self, year, iter):
         asimRun = self.asimRuns[(year, iter)]
@@ -306,7 +310,9 @@ class PilatesOutputData:
 
         print(
             "Finding {0} unmatched ASim trips and {1} unmatched BEAM trips out of {2} total".format(
-                combinedData.trip_id.isna().sum(), combinedData.tripId.isna().sum(), combinedData.shape[0]
+                combinedData.trip_id.isna().sum(),
+                combinedData.tripId.isna().sum(),
+                combinedData.shape[0],
             )
         )
 

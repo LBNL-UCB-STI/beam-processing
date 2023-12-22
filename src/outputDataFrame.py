@@ -381,16 +381,28 @@ class PersonTrips(OutputDataFrame):
         unSplitData = self.dataFrame
         outputData = dict()
         try:
-            print(unSplitDf.index.get_level_values("IDMerged").astype(int).map(
-                personIdToChunk
-            ).head(2))
+            print(
+                unSplitDf.index.get_level_values("IDMerged")
+                .astype(int)
+                .map(personIdToChunk)
+                .head(2)
+            )
         except:
             print("DSTSTS")
-        for fileType in ["ModeChoice", "PathTraversal", "TeleportationEvent", "PersonCost", "Replanning", "ParkingEvent"]:
+        for fileType in [
+            "ModeChoice",
+            "PathTraversal",
+            "TeleportationEvent",
+            "PersonCost",
+            "Replanning",
+            "ParkingEvent",
+        ]:
             print("Breaking {0} file into chunks".format(fileType))
             unSplitDf = unSplitData[fileType]
-            unSplitDf["divisionId"] = unSplitDf.index.get_level_values("IDMerged").astype(int).map(
-                personIdToChunk
+            unSplitDf["divisionId"] = (
+                unSplitDf.index.get_level_values("IDMerged")
+                .astype(int)
+                .map(personIdToChunk)
             )
             outputData[fileType] = {
                 k: table for k, table in unSplitDf.groupby("divisionId")
@@ -1481,6 +1493,59 @@ class ModeEnergyByYear(OutputDataFrame):
                 try:
                     data = self.pilatesInputDict[(yr, x)]
                     self.__yearToDataFrame[yr] = data.modeEnergy.dataFrame
+                    x = -100
+                except Exception as e:
+                    print(
+                        "Can't find path traversals file for year {0} iteration {1}, trying the previous iteration".format(
+                            yr, x
+                        )
+                    )
+                    print(e)
+                    x -= 1
+        if any(self.__yearToDataFrame):
+            return pd.concat(self.__yearToDataFrame, names=["year", "mode"])
+        else:
+            return pd.DataFrame()
+
+
+class CongestionInfoByYear(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
+    ):
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+    def load(self):
+        """
+        Loads the vehicle miles traveled (VMT) for each mode by year from the BEAM output data.
+
+        Returns:
+            pd.DataFrame: The DataFrame containing the loaded data.
+        """
+        for (yr, it), data in self.pilatesInputDict.items():
+            if yr in self.__lastIterationPerYear:
+                if it >= self.__lastIterationPerYear[yr]:
+                    self.__lastIterationPerYear[yr] = it
+            else:
+                self.__lastIterationPerYear[yr] = it
+        for yr, it in self.__lastIterationPerYear.items():
+            x = it
+            while x > -2:
+                try:
+                    data = self.pilatesInputDict[(yr, x)]
+                    df = data.tazTrafficVolumes.dataFrame
+                    df["mph"] = df["VMT"] / df["VHT"]
+                    df["congestedHours"] = df["mph"] < 1.0
+                    df = df.groupby(["taz1454", "attributeOrigType"]).agg(
+                        {"VMT": "sum", "VHT": "sum", "congestedHours": "sum"}
+                    )
+                    df["mph"] = df["VMT"] / df["VHT"]
+                    self.__yearToDataFrame[yr] = df.unstack("taz1454")
                     x = -100
                 except Exception as e:
                     print(

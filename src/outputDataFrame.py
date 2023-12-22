@@ -101,8 +101,8 @@ class OutputDataFrame:
         assert isinstance(obj, pd.DataFrame)
         try:
             obj.to_parquet(self._diskLocation, engine="fastparquet")
-        except:
-            print("STOP!!!")
+        except Exception as e:
+            print(e)
 
     def _read(self):
         return pd.read_parquet(self._diskLocation, engine="fastparquet")

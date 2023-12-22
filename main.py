@@ -15,7 +15,7 @@ if __name__ == "__main__":
         outputDataDirectory.OutputDataDirectory("output"), directory
     )
 
-    d = pilatesData.beamRuns[(2017, 2)].personTrips.dataFrame
+    d = pilatesData.runInexus(2017, 2)
 
     # baseFolderName = "https://storage.googleapis.com/beam-core-outputs/output/sf-light/sf-light-1k-xml__2022-11-30_15-11-36_zlb"
     baseFolderName = "https://storage.googleapis.com/beam-core-outputs/sfbay-demos-base-20231107/beam/year-2015-iteration-2"

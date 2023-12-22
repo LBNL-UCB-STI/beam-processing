@@ -179,6 +179,9 @@ class EventsFile(RawOutputFile):
             "riders": "str",
             "linkTravelTime": "str",
             "links": "str",
+            "person": "str",
+            "vehicle": "str",
+            "parkingTaz": "str",
         }
         relativePath = [
             "ITERS",
@@ -187,7 +190,7 @@ class EventsFile(RawOutputFile):
         ]
         super().__init__(inputDirectory, relativePath, dtype=dtypes)
         self.eventTypes = dict()
-        self.__chunksize = 1000000
+        self.__chunksize = 5000000
 
     def collectEvents(self, eventTypes: list):
         """
@@ -205,6 +208,9 @@ class EventsFile(RawOutputFile):
                 "riders": "str",
                 "linkTravelTime": "str",
                 "links": "str",
+                "person": "str",
+                "vehicle": "str",
+                "parkingTaz": "str",
             },
         ):
             for eventType in eventTypes:
@@ -340,39 +346,42 @@ class TripUtilitiesFiles(RawOutputFile):
             pd.DataFrame: The loaded DataFrame.
         """
         if self._file is None:
-            print("Reading files from {0}".format(self.filePath))
             out = dict()
             folderName = os.path.join(".tmp", self.__hash())
             if not os.path.exists(folderName):
                 os.makedirs(folderName)
-            try:
-                with urllib.request.urlopen(self.filePath) as zipresp:
-                    with ZipFile(BytesIO(zipresp.read())) as zfile:
-                        # zfile.extractall(".tmp/")
-                        for ls in tqdm(zfile.filelist):
-                            if ls.filename.endswith("utilities.csv"):
-                                if not os.path.exists(
-                                    os.path.join(folderName, ls.filename)
-                                ):
-                                    zfile.extract(ls.filename, folderName)
-                                # with zfile.open(
-                                #     "trip_mode_choice/1370833_raw.csv"
-                                # ) as myfile:
-                                groupName = ls.filename.split("/")[1].split("_")[0]
-                                df = pd.read_csv(
-                                    os.path.join(folderName, ls.filename),
-                                    index_col="trip_id",
-                                )
-                                out[groupName] = df
+                print("Reading files from {0}".format(self.filePath))
+                try:
+                    with urllib.request.urlopen(self.filePath) as zipresp:
+                        with ZipFile(BytesIO(zipresp.read())) as zfile:
+                            for ls in tqdm(zfile.filelist):
+                                if ls.filename.endswith("utilities.csv"):
+                                    if not os.path.exists(
+                                        os.path.join(folderName, ls.filename)
+                                    ):
+                                        zfile.extract(ls.filename, folderName)
+                                    groupName = ls.filename.split("/")[1].split("_")[0]
+                                    df = pd.read_csv(
+                                        os.path.join(folderName, ls.filename),
+                                        index_col="trip_id",
+                                    )
+                                    out[groupName] = df
+                    self._file = pd.concat(out, names=["division", "trip_id"])
+                except FileNotFoundError:
+                    print("File at {0} does not exist".format(self.filePath))
+                    return None
+            else:
+                files = os.listdir(os.path.join(folderName, "trip_mode_choice"))
+                print("Reading saved utility files")
+                for file in files:
+                    if file.endswith("utilities.csv"):
+                        groupName = file.split("_")[0]
+                        df = pd.read_csv(
+                            os.path.join(folderName, "trip_mode_choice", file),
+                            index_col="trip_id",
+                        )
+                        out[groupName] = df
                 self._file = pd.concat(out, names=["division", "trip_id"])
-                # self._file = pd.read_csv(
-                #     self.filePath, index_col=self.index_col, dtype=None
-                # )
-                print("Removing temporary unzipped files")
-                shutil.rmtree(folderName)
-            except FileNotFoundError:
-                print("File at {0} does not exist".format(self.filePath))
-                return None
         return self._file
 
     def getInitialDivisionMapping(self):
@@ -560,6 +569,7 @@ class ActivitySimRunInputDirectory(InputDirectory):
             division_to_trips,
             division_to_persons,
             division_to_households,
+            person_id_to_division,
         )
 
 

@@ -99,7 +99,10 @@ class OutputDataFrame:
 
     def _write(self, obj):
         assert isinstance(obj, pd.DataFrame)
-        obj.to_parquet(self._diskLocation, engine="fastparquet")
+        try:
+            obj.to_parquet(self._diskLocation, engine="fastparquet")
+        except:
+            print("STOP!!!")
 
     def _read(self):
         return pd.read_parquet(self._diskLocation, engine="fastparquet")
@@ -303,16 +306,33 @@ class PersonTrips(OutputDataFrame):
             "TeleportationEvent",
         }
 
+    @property
+    def cached(self) -> bool:
+        """
+        Checks if the DataFrame is cached.
+
+        Returns:
+            bool: True if the DataFrame is cached, False otherwise.
+        """
+        loc = self._diskLocation.replace(".parquet", "")
+        mcExists = os.path.exists("{0}_{1}.parquet".format(loc, "ModeChoice"))
+        ptExists = os.path.exists("{0}_{1}.parquet".format(loc, "PathTraversal"))
+        return mcExists & ptExists
+
     def _write(self, obj):
         assert isinstance(obj, dict)
-        loc = self._diskLocation.replace('.parquet','')
+        loc = self._diskLocation.replace(".parquet", "")
         for grp, df in obj.items():
             fileLoc = "{0}_{1}.parquet".format(loc, grp)
-            df.to_parquet(fileLoc, engine="fastparquet")
+            print("Saving {0} file to {1}".format(fileLoc, grp))
+            try:
+                df.to_parquet(fileLoc, engine="fastparquet")
+            except:
+                print("OH NO!!!")
 
     def _read(self):
         out = dict()
-        loc = self._diskLocation.replace('.parquet','')
+        loc = self._diskLocation.replace(".parquet", "")
         for tab in list(self.__requiredTables):
             fileLoc = "{0}_{1}.parquet".format(loc, tab)
             out[tab] = pd.read_parquet(fileLoc, engine="fastparquet")
@@ -337,20 +357,37 @@ class PersonTrips(OutputDataFrame):
         Returns:
             pd.DataFrame: The loaded DataFrame.
         """
-        if not self.__requiredTables.issubset(self.beamInputDirectory.eventsFile.eventTypes):
+        if not self.__requiredTables.issubset(
+            self.beamInputDirectory.eventsFile.eventTypes
+        ):
             print(
                 "Downloading events for {0} from {1}".format(
                     self.__class__.__name__,
                     self.beamInputDirectory.eventsFile.filePath,
                 )
             )
-            self.beamInputDirectory.eventsFile.collectEvents(list(self.__requiredTables))
+            self.beamInputDirectory.eventsFile.collectEvents(
+                list(self.__requiredTables)
+            )
         df = {
             tab: self.beamInputDirectory.eventsFile.eventTypes[tab]
             for tab in list(self.__requiredTables)
         }
 
         return df
+
+    def chunk(self, personIdToChunk):
+        unSplitData = self.dataFrame
+        outputData = dict()
+        for fileType in ["ModeChoice", "PathTraversal", "TeleportationEvent"]:
+            unSplitDf = unSplitData[fileType]
+            unSplitDf["divisionId"] = unSplitDf.index.get_level_values("IDMerged").astype(int).map(
+                personIdToChunk
+            )
+            outputData[fileType] = {
+                k: table for k, table in unSplitDf.groupby("divisionId")
+            }
+        return outputData
 
 
 class PersonEntersVehicleEvents(OutputDataFrame):

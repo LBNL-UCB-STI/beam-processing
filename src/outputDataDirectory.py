@@ -4,6 +4,7 @@ from urllib.error import HTTPError
 import pandas as pd
 
 import urllib3
+from joblib import Parallel, delayed
 
 from src.input import (
     BeamRunInputDirectory,
@@ -42,6 +43,7 @@ from src.outputDataFrame import (
     TAZTrafficVolumes,
     PersonTrips,
 )
+from src.transformations import assignTripIdToPathTraversals
 
 
 class OutputDataDirectory:
@@ -129,7 +131,6 @@ class BeamOutputData:
         self.tazTrafficVolumes = TAZTrafficVolumes(
             self.outputDataDirectory, self.labeledLinkStatsFile, self.geometry
         )
-        print("dsfads")
 
 
 class ActivitySimOutputData:
@@ -247,6 +248,32 @@ class PilatesOutputData:
         self.modeEnergyPerYear = ModeEnergyByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
+
+    def runInexus(self, year, iter):
+        asimRun = self.asimRuns[(year, iter)]
+        beamRun = self.beamRuns[(year, iter)]
+        (
+            division_to_utilities,
+            division_to_trips,
+            division_to_persons,
+            division_to_households,
+            person_id_to_division,
+        ) = asimRun.activitySimRunInputDirectory.getSplitData()
+
+        combinedData = beamRun.personTrips.chunk(person_id_to_division)
+        mc = combinedData["ModeChoice"]
+        pt = combinedData["PathTraversal"]
+        te = combinedData["TeleportationEvent"]
+
+        def combineChunk(chunk):
+            return assignTripIdToPathTraversals(pt[chunk], mc[chunk])
+
+        processed_list = Parallel(n_jobs=4)(
+            delayed(combineChunk)(ch)
+            for ch in mc.keys()
+        )
+
+        return combinedData
 
 
 class PilatesSettings:

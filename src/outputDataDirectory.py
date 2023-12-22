@@ -1,4 +1,5 @@
 import urllib.request
+from multiprocessing import cpu_count
 from typing import Tuple, Dict, Iterable, Optional
 from urllib.error import HTTPError
 import pandas as pd
@@ -43,7 +44,7 @@ from src.outputDataFrame import (
     TAZTrafficVolumes,
     PersonTrips,
 )
-from src.transformations import assignTripIdToPathTraversals
+from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
 
 class OutputDataDirectory:
@@ -264,13 +265,47 @@ class PilatesOutputData:
         mc = combinedData["ModeChoice"]
         pt = combinedData["PathTraversal"]
         te = combinedData["TeleportationEvent"]
+        pc = combinedData["PersonCost"]
+        pe = combinedData["ParkingEvent"]
+        rp = combinedData["Replanning"]
 
         def combineChunk(chunk):
-            return assignTripIdToPathTraversals(pt[chunk], mc[chunk])
+            pts = assignTripIdToEvents(
+                pt[chunk],
+                mc[chunk],
+                {
+                    "mode_choice_actual_BEAM": "mode_choice_actual_BEAM",
+                    "mode_choice_planned_BEAM": "mode_choice_planned_BEAM",
+                    "distance_mode_choice": "distance_mode_choice",
+                },
+            )
+            tes = assignTripIdToEvents(
+                te[chunk], mc[chunk], {"distance_mode_choice": "distance_travelling"}
+            )
+            tes["distance_privateCar"] = tes["distance_travelling"].copy()
+            tes["distance_mode_choice"] = tes["distance_travelling"].copy()
+            pcs = assignTripIdToEvents(pc[chunk], mc[chunk])
+            pes = assignTripIdToEvents(pe[chunk], mc[chunk])
+            rps = assignTripIdToEvents(rp[chunk], mc[chunk])
+            allEvents = pd.concat([pts, tes, pcs, pes, rps], axis=0)
+            combined = mergeWithTripsAndAggregate(
+                allEvents,
+                division_to_trips[chunk],
+                division_to_utilities[chunk],
+                division_to_persons[chunk],
+            )
+            return combined
 
-        processed_list = Parallel(n_jobs=4)(
-            delayed(combineChunk)(ch)
-            for ch in mc.keys()
+        processed_list = Parallel(n_jobs=cpu_count() // 2)(
+            delayed(combineChunk)(ch) for ch in mc.keys()
+        )
+
+        combinedData = pd.concat(processed_list, axis=0)
+
+        print(
+            "Finding {0} unmatched ASim trips and {1} unmatched BEAM trips out of {2} total".format(
+                combinedData.trip_id.isna().sum(), combinedData.tripId.isna().sum(), combinedData.shape[0]
+            )
         )
 
         return combinedData

@@ -310,7 +310,7 @@ def doInexus(dfs: dict):
         return events
 
     def processPTs(events):
-        events = events.rename(columns={"mode": "modeBEAM"})
+        events = events.rename(columns={"mode": "modeBEAM", "netCost": "cost_BEAM"})
         events = addEmissions(events)
         # events = updateMode(events)
         events = updateDuration(events)
@@ -371,7 +371,16 @@ def doInexus(dfs: dict):
         return pathTraversals
 
     def processTeleportation(events):
-        events = events.rename(columns={"mode": "modeBEAM", "person": "IDMerged"})
+        events = events.copy().rename(
+            columns={"currentTourMode": "mode_choice_actual_BEAM", "person": "IDMerged"}
+        )
+
+        events["duration_travelling"] = events["arrivalTime"] - events["departureTime"]
+
+        events["duration_in_privateCar"] = events["duration_travelling"].copy()
+
+        events["mode_choice_planned_BEAM"] = events["mode_choice_actual_BEAM"].copy()
+
         events["IDMerged"] = pd.to_numeric(events.IDMerged)
         events = (
             events.sort_values(["time"])
@@ -389,21 +398,78 @@ def doInexus(dfs: dict):
         )
         return events.set_index("eventOrder", append=True).droplevel(1)
 
-    def processPEVs(events):
-        return 1
+    def processReplanning(events):
+        # TODO: Check that this gets indexed correctly
+        events = events.copy().rename(columns={"person": "IDMerged"})
+        events["IDMerged"] = pd.to_numeric(events.IDMerged)
+        events = (
+            events.sort_values(["time"])
+            .set_index("IDMerged", append=True)
+            .reorder_levels([1, 0])
+            .sort_index(level=0)
+        )
+
+        events["eventOrder"] = (
+            events.index.to_frame(index=False)
+            .groupby("IDMerged")
+            .agg("rank")
+            .astype(int)
+            .values
+        )
+        return events.set_index("eventOrder", append=True).droplevel(1)
+
+    def processParking(events):
+        events = events.rename(columns={"cost": "cost_BEAM", "driver": "IDMerged"})
+        events = events.loc[events["IDMerged"].str.isnumeric(), :]
+        events = events.loc[
+            ~events["IDMerged"].isna(),  # Might be duplicated
+            ["IDMerged", "parkingTaz", "parkingType", "time", "type", "cost_BEAM"],
+        ].copy()
+        events = (
+            events.sort_values(["time"])
+            .set_index("IDMerged", append=True)
+            .reorder_levels([1, 0])
+            .sort_index(level=0)
+        )
+
+        events["eventOrder"] = (
+            events.index.to_frame(index=False)
+            .groupby("IDMerged")
+            .agg("rank")
+            .astype(int)
+            .values
+        )
+        return events.set_index("eventOrder", append=True).droplevel(1)
+
+    def processPersonCost(events):
+        events = events.rename(columns={"person": "IDMerged", "mode": "mode_BEAM"})
+        events["cost_BEAM"] = events["tollCost"] + events["netCost"]
+        events = events[["IDMerged", "mode_BEAM", "time", "type", "cost_BEAM"]].copy()
+        events = (
+            events.sort_values(["time"])
+            .set_index("IDMerged", append=True)
+            .reorder_levels([1, 0])
+            .sort_index(level=0)
+        )
+
+        events["eventOrder"] = (
+            events.index.to_frame(index=False)
+            .groupby("IDMerged")
+            .agg("rank")
+            .astype(int)
+            .values
+        )
+        return events.set_index("eventOrder", append=True).droplevel(1)
 
     def processModeChoice(events):
-        events = events.rename(columns={"mode": "modeBEAM", "person": "IDMerged"})
-        events["distance_travelling"] = np.where(
-            (events["modeBEAM"] == "hov2_teleportation")
-            | (events["modeBEAM"] == "hov3_teleportation"),
-            events["length"],
-            np.nan,
+        events = events.rename(
+            columns={
+                "mode": "modeBEAM",
+                "person": "IDMerged",
+                "netCost": "cost_BEAM",
+                "length": "distance_mode_choice",
+            }
         )
-        events["distance_mode_choice"] = np.where(
-            events["type"] == "ModeChoice", events["length"], np.nan
-        )
-
         events["mode_choice_actual_BEAM"] = events.groupby(["IDMerged", "tripId"])[
             "modeBEAM"
         ].transform("last")
@@ -445,48 +511,156 @@ def doInexus(dfs: dict):
     PTs = processPTs(dfs["PathTraversal"])
     TEs = processTeleportation(dfs["TeleportationEvent"])
     MCs = processModeChoice(dfs["ModeChoice"])
-
-    # def aggregator(grp):
-    #     if grp.name in MCtimes.index:
-    #         idx = (
-    #             np.searchsorted(
-    #                 MCtimes.loc[grp.name].values, grp["time"].values, side="right"
-    #             )
-    #             - 1
-    #         )
-    #         # vals = MCtimes.loc[grp.name].index.iloc[idx]
-    #         grp["tripId"] = MCids.loc[grp.name].iloc[idx].values
-    #     return grp["tripId"]
-    #
-    # PTs["tripId"] = PTs.groupby("IDMerged").apply(aggregator).explode().values
+    REs = processReplanning(dfs["Replanning"])
+    PEs = processParking(dfs["ParkingEvent"])
+    PCs = processPersonCost(dfs["PersonCost"])
 
     dfs["PathTraversal"] = PTs
     dfs["TeleportationEvent"] = TEs
     dfs["ModeChoice"] = MCs
+    dfs["Replanning"] = REs
+    dfs["ParkingEvent"] = PEs
+    dfs["PersonCost"] = PCs
 
     return dfs
 
 
-def assignTripIdToPathTraversals(pathTraversals, modeChoices):
+def assignTripIdToEvents(pathTraversals, modeChoices, otherColumns=None):
+    if otherColumns is None:
+        otherColumns = dict()
     modeChoices.index = modeChoices.index.set_levels(
         modeChoices.index.levels[0].astype(int), level=0
     )
     MCtimes = modeChoices["original_time"].copy()
     MCids = modeChoices["tripId"].copy().astype(pd.Int64Dtype())
+    # toAdd = dict()
+    # for col in otherColumns:
+    #     toAdd[col] = modeChoices[col].copy()
 
     def aggregator(grp):
-        if grp.name in MCtimes.index:
+        vals = dict()
+        pId = int(grp.name)
+        if pId in MCtimes.index:
             idx = np.searchsorted(
-                MCtimes.loc[grp.name].values, grp["time"].values, side="right"
+                MCtimes.loc[pId].values, grp["time"].values, side="right"
             )
-            vals = MCids.loc[grp.name].iloc[idx - 1].values
-        else:
-            vals = np.full_like(grp.index, np.nan)
-        return pd.Series(vals, index=grp.index.get_level_values(1))
+            vals["tripId"] = MCids.loc[pId].iloc[idx - 1].values
+            for oldName, newName in otherColumns.items():
+                vals[newName] = modeChoices.loc[pId, oldName].iloc[idx - 1].values
+        return pd.DataFrame(vals, index=grp.index.get_level_values(1))
 
-    pathTraversals["tripId"] = pathTraversals.groupby("IDMerged").apply(aggregator)
+    newColumns = pathTraversals.groupby("IDMerged").apply(aggregator)
+    return pd.concat([pathTraversals, newColumns], axis=1)
 
-    return pathTraversals
+
+def mergeWithTripsAndAggregate(events, trips, utilities, persons):
+    # aggfunc = {'actStartTime': "sum",
+    #            'actEndTime': "sum",
+    aggfunc = {
+        "duration_travelling": "sum",
+        'cost_BEAM': "sum",
+        # 'actStartType': "sum",
+        # 'actEndType': "sum",
+        "duration_walking": "sum",
+        "duration_in_privateCar": "sum",
+        "duration_on_bike": "sum",
+        "duration_in_ridehail": "sum",
+        "distance_travelling": "sum",
+        "duration_in_transit": "sum",
+        "distance_walking": "sum",
+        "distance_bike": "sum",
+        "distance_ridehail": "sum",
+        "distance_privateCar": "sum",
+        "distance_transit": "sum",
+        # 'legVehicleIds': "sum",
+        "mode_choice_planned_BEAM": "first",
+        "mode_choice_actual_BEAM": "last",
+        "vehicle": lambda x: ", ".join(set(x.dropna().astype(str))),
+        "numPassengers": lambda x: ", ".join(list(x.dropna().astype(str))),
+        "distance_mode_choice": "sum",
+        # 'replanning_status': "sum",
+        "reason": lambda x: ", ".join(list(x.dropna().astype(str))),
+        "parkingType": lambda x: ", ".join(list(x.dropna().astype(str))),
+        # 'transit_bus': "sum",
+        # 'transit_subway': "sum",
+        # 'transit_tram': "sum",
+        # 'transit_cable_car': "sum",
+        # 'ride_hail_pooled': "sum",
+        # 'transit_rail': "sum",
+        "fuelFood": "sum",
+        "fuelElectricity": "sum",
+        "fuelBiodiesel": "sum",
+        "fuelDiesel": "sum",
+        "fuel_not_Food": "sum",
+        "fuelGasoline": "sum",
+        # 'fuel_marginal': "sum",
+        # 'BlockGroupStart': 'first',
+        "startX": "first",
+        "startY": "first",
+        # 'bgid_start': 'first',
+        # 'tractid_start': 'first',
+        # 'juris_name_start': 'first',
+        # 'county_name_start': 'first',
+        # 'mpo_start': 'first',
+        # 'BlockGroupEnd': 'last',
+        "endX": "last",
+        "endY": "last",
+        # 'bgid_end': 'last',
+        # 'tractid_end': 'last',
+        # 'juris_name_end': 'last',
+        # 'county_name_end': 'last',
+        # 'mpo_end': 'last',
+        "emissionFood": "sum",
+        "emissionElectricity": "sum",
+        "emissionDiesel": "sum",
+        "emissionGasoline": "sum",
+        "emissionBiodiesel": "sum",
+        # 'emission_marginal': "sum"
+    }
+    p_cols = [
+        "age",
+        "earning",
+        "edu",
+        "race_id",
+        "sex",
+        "household_id",
+        "home_taz",
+        "school_taz",
+        "workplace_taz",
+        "workplace_location_logsum",
+        "distance_to_work",
+    ]
+
+    t_cols = [
+        "person_id",
+        "tour_id",
+        "primary_purpose",
+        "purpose",
+        "destination",
+        "origin",
+        "destination_logsum",
+        "depart",
+        "trip_mode",
+        "mode_choice_logsum",
+    ]
+
+    eventsByTrip = events.groupby("tripId").agg(aggfunc)
+
+    asimData = pd.merge(
+        pd.merge(utilities, trips[t_cols], left_on="trip_id", right_index=True),
+        persons[p_cols],
+        left_on="person_id",
+        right_index=True,
+    )
+
+    final = pd.merge(
+        eventsByTrip.reset_index(),
+        asimData,
+        left_on="tripId",
+        right_on="trip_id",
+        how="outer",
+    )
+    return final
 
 
 def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame):

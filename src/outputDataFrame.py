@@ -327,7 +327,8 @@ class PersonTrips(OutputDataFrame):
             print("Saving {0} file to {1}".format(fileLoc, grp))
             try:
                 df.to_parquet(fileLoc, engine="fastparquet")
-            except:
+            except Exception as e:
+                print(e)
                 print("OH NO!!!")
 
     def _read(self):
@@ -379,7 +380,8 @@ class PersonTrips(OutputDataFrame):
     def chunk(self, personIdToChunk):
         unSplitData = self.dataFrame
         outputData = dict()
-        for fileType in ["ModeChoice", "PathTraversal", "TeleportationEvent"]:
+        for fileType in ["ModeChoice", "PathTraversal", "TeleportationEvent", "PersonCost", "Replanning", "ParkingEvent"]:
+            print("Breaking {0} file into chunks".format(fileType))
             unSplitDf = unSplitData[fileType]
             unSplitDf["divisionId"] = unSplitDf.index.get_level_values("IDMerged").astype(int).map(
                 personIdToChunk

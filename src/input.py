@@ -116,7 +116,7 @@ class Geometry:
         self._path = None
         self._inputcrs = None
         self._gdf = None
-        self._index = None
+        self.index = None
         self._otherFiles = dict()
 
     @property
@@ -130,7 +130,7 @@ class Geometry:
         for filepath, key in self._otherFiles.items():
             otherFile = pd.read_csv(filepath)
             self._gdf = pd.merge(
-                self._gdf, otherFile, left_on=self._index, right_on=key
+                self._gdf, otherFile, left_on=self.index, right_on=key
             )
 
     def zoneToCountyMap(self):

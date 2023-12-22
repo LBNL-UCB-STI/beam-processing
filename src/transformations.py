@@ -752,13 +752,13 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
     return final
 
 
-def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame):
+def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame, taz_column: str):
     gdf = gpd.GeoDataFrame(
         network,
         geometry=gpd.points_from_xy(
             network["toLocationX"], network["toLocationY"], crs="epsg:26910"
         ),
-    ).sjoin(TAZ.loc[:, ["taz1454", "geometry"]], how="left")
+    ).sjoin(TAZ.loc[:, [taz_column, "geometry"]], how="left")
     return pd.DataFrame(gdf.drop(columns=["geometry", "index_right"]))
 
 

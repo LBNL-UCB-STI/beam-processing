@@ -611,7 +611,9 @@ class LabeledNetwork(OutputDataFrame):
         self.indexedOn = "linkId"
 
     def preprocess(self, df):
-        return labelNetworkWithTaz(df, self.beamOutputData.geometry.gdf)
+        return labelNetworkWithTaz(
+            df, self.beamOutputData.geometry.gdf, self.beamOutputData.geometry.index
+        )
 
     def load(self):
         return self.beamOutputData.networkFile.file()

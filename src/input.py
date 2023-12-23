@@ -127,11 +127,12 @@ class Geometry:
 
     def load(self):
         self._gdf = gpd.read_file(self._path)
-        for filepath, key in self._otherFiles.items():
-            otherFile = pd.read_csv(filepath)
-            self._gdf = pd.merge(
-                self._gdf, otherFile, left_on=self.index, right_on=key
-            )
+        if len(self._otherFiles) > 0:
+            for filepath, key in self._otherFiles.items():
+                otherFile = pd.read_csv(filepath)
+                self._gdf = pd.merge(
+                    self._gdf, otherFile, left_on=self.index, right_on=key
+                )
 
     def zoneToCountyMap(self):
         return NotImplementedError("This region is not defined yet")

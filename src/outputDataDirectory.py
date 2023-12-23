@@ -206,6 +206,10 @@ class PilatesOutputData:
                     "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
                 }
             )
+        elif region == "Austin":
+            self.geometry = SfBayGeometry(
+                otherFiles=dict()
+            )
         else:
             self.geometry = Geometry()
 

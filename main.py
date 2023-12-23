@@ -9,7 +9,7 @@ if __name__ == "__main__":
         pilatesFolderName, [2010, 2015, 2017], 3, region="Austin"
     )
     pilatesData = outputDataDirectory.PilatesOutputData(
-        outputDataDirectory.OutputDataDirectory("output/ausin-2010-base"), directory
+        outputDataDirectory.OutputDataDirectory("output/ausin-2010-base"), directory, region="Austin"
     )
 
     pilatesData.congestionInfoByYear.toCsv()

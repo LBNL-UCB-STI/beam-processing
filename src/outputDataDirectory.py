@@ -79,7 +79,6 @@ class BeamOutputData:
         self,
         outputDataDirectory: OutputDataDirectory,
         beamRunInputDirectory: BeamRunInputDirectory,
-        geometry: Optional[Geometry] = Geometry(),
         collectEvents=False,
     ):
         """
@@ -96,7 +95,7 @@ class BeamOutputData:
         )
         self.logFileRequest.get_method = lambda: "HEAD"
         self.logFile = urllib.request.urlopen(self.logFileRequest)
-        self.geometry = geometry
+        self.geometry = beamRunInputDirectory.geometry
 
         if collectEvents:
             self.beamRunInputDirectory.eventsFile.collectEvents(
@@ -223,7 +222,7 @@ class PilatesOutputData:
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
                 self.beamRuns[(yr, it)] = BeamOutputData(
-                    outputDataDirectory, directory, self.geometry
+                    outputDataDirectory, directory
                 )
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))

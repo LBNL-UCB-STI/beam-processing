@@ -845,7 +845,7 @@ class LabeledLinkStatsFile(TAZBasedDataFrame):
             raise TypeError(
                 "Labeling LinkStats requires either a LinkStatasFromPathTraversals or LinkStatsFile object"
             )
-        self.geoIndex = "taz1454"
+        self.geoIndex = self.geometry.index
         self.indexedOn = ["link", "hour"]
 
     def load(self):
@@ -892,11 +892,13 @@ class TAZTrafficVolumes(TAZBasedDataFrame):
         self.indexedOn = [geometry.index, "hour", "attributeOrigType"]
 
     def load(self):
-        return self.labeledLinkStatsFile.process(
+        df = self.labeledLinkStatsFile.process(
             dict(),
             [self.geometry.index, "hour", "attributeOrigType"],
             {"VMT": "sum", "VHT": "sum"},
         )
+        df["mph"] = df["VMT"] / df["VHT"]
+        return df
 
 
 class MandatoryLocationsByTaz(TAZBasedDataFrame):

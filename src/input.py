@@ -324,6 +324,7 @@ class BeamRunInputDirectory(InputDirectory):
         baseFolderName: str,
         numberOfIterations: int = 0,
         geometry: Optional[Geometry] = None,
+        region: Optional[str] = None,
     ):
         """
         Initializes a BeamRunInputDirectory instance.
@@ -336,8 +337,20 @@ class BeamRunInputDirectory(InputDirectory):
         self.eventsFile = EventsFile(self, numberOfIterations)
         self.inputPlansFile = InputPlansFile(self)
         self.linkStatsFile = LinkStatsFile(self, numberOfIterations)
-        self.geometry = geometry
-        self.networkFile = NetworkFile(self, geometry)
+        if (region is not None) & (geometry is None):
+            if region == "SFBay":
+                self.geometry = SfBayGeometry(
+                    otherFiles={
+                        "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
+                    }
+                )
+            elif region == "Austin":
+                self.geometry = AustinGeometry(otherFiles=dict())
+            else:
+                self.geometry = Geometry()
+        else:
+            self.geometry = geometry
+        self.networkFile = NetworkFile(self, self.geometry)
 
 
 class TripUtilitiesFiles(RawOutputFile):

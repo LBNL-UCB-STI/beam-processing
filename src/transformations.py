@@ -762,7 +762,7 @@ def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame, taz_column
     return pd.DataFrame(gdf.drop(columns=["geometry", "index_right"]))
 
 
-def mergeLinkstatsWithNetwork(linkStats: pd.DataFrame, network: pd.DataFrame):
+def mergeLinkstatsWithNetwork(linkStats: pd.DataFrame, network: pd.DataFrame, index: str):
     linkStats["VMT"] = linkStats["volume"] * linkStats["length"] / 1609.34
     linkStats["VHT"] = linkStats["volume"] * linkStats["traveltime"] / 3600.0
     out = linkStats.merge(network, left_on="link", right_index=True)
@@ -776,6 +776,6 @@ def mergeLinkstatsWithNetwork(linkStats: pd.DataFrame, network: pd.DataFrame):
             "linkModes",
             "attributeOrigId",
             "attributeOrigType",
-            "taz1454",
+            index,
         ]
     ]

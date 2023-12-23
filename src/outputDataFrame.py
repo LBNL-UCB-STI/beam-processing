@@ -858,7 +858,7 @@ class LabeledLinkStatsFile(TAZBasedDataFrame):
         return None
 
     def preprocess(self, df):
-        return mergeLinkstatsWithNetwork(df, self.labeledNetwork.dataFrame)
+        return mergeLinkstatsWithNetwork(df, self.labeledNetwork.dataFrame, self.geometry.index)
 
     def hash(self):
         """
@@ -1529,6 +1529,7 @@ class CongestionInfoByYear(OutputDataFrame):
         Returns:
             pd.DataFrame: The DataFrame containing the loaded data.
         """
+
         for (yr, it), data in self.pilatesInputDict.items():
             if yr in self.__lastIterationPerYear:
                 if it >= self.__lastIterationPerYear[yr]:
@@ -1540,14 +1541,15 @@ class CongestionInfoByYear(OutputDataFrame):
             while x > -2:
                 try:
                     data = self.pilatesInputDict[(yr, x)]
+                    tazIndex = data.geometry.index
                     df = data.tazTrafficVolumes.dataFrame
                     df["mph"] = df["VMT"] / df["VHT"]
                     df["congestedHours"] = df["mph"] < 1.0
-                    df = df.groupby(["taz1454", "attributeOrigType"]).agg(
+                    df = df.groupby([tazIndex, "attributeOrigType"]).agg(
                         {"VMT": "sum", "VHT": "sum", "congestedHours": "sum"}
                     )
                     df["mph"] = df["VMT"] / df["VHT"]
-                    self.__yearToDataFrame[yr] = df.unstack("taz1454")
+                    self.__yearToDataFrame[yr] = df.unstack(tazIndex)
                     x = -100
                 except Exception as e:
                     print(

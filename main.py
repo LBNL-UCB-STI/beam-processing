@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     pilatesData.congestionInfoByYear.toCsv()
 
-    pilatesData.beamRuns[(2017, 2)].tazTrafficVolumes.toCsv()
-    pilatesData.asimRuns[(2017, 2)].tripPMTByPrimaryPurpose.toCsv()
+    pilatesData.beamRuns[(2017, 3)].tazTrafficVolumes.toCsv()
+    pilatesData.asimRuns[(2017, 3)].tripPMTByPrimaryPurpose.toCsv()
 
     processedPersonTrips = pilatesData.runInexus(2017, 2)

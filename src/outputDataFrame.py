@@ -1544,12 +1544,14 @@ class CongestionInfoByYear(OutputDataFrame):
                     tazIndex = data.geometry.index
                     df = data.tazTrafficVolumes.dataFrame
                     df["mph"] = df["VMT"] / df["VHT"]
-                    df["congestedHours"] = df["mph"] < 1.0
+                    df["congestedHours"] = df["mph"] < 2.0
                     df = df.groupby([tazIndex, "attributeOrigType"]).agg(
                         {"VMT": "sum", "VHT": "sum", "congestedHours": "sum"}
                     )
                     df["mph"] = df["VMT"] / df["VHT"]
-                    self.__yearToDataFrame[yr] = df.unstack(tazIndex)
+                    df = df.unstack(tazIndex)
+                    df.columns.set_names("metric", level=0, inplace=True)
+                    self.__yearToDataFrame[yr] = df
                     x = -100
                 except Exception as e:
                     print(
@@ -1560,6 +1562,6 @@ class CongestionInfoByYear(OutputDataFrame):
                     print(e)
                     x -= 1
         if any(self.__yearToDataFrame):
-            return pd.concat(self.__yearToDataFrame, names=["year", "mode"])
+            return pd.concat(self.__yearToDataFrame, names=["year", "roadType"])
         else:
             return pd.DataFrame()

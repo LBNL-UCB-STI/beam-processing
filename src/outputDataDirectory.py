@@ -13,6 +13,7 @@ from src.input import (
     PilatesRunInputDirectory,
     SfBayGeometry,
     Geometry,
+    AustinGeometry,
 )
 from src.outputDataFrame import (
     PathTraversalEvents,
@@ -207,9 +208,7 @@ class PilatesOutputData:
                 }
             )
         elif region == "Austin":
-            self.geometry = SfBayGeometry(
-                otherFiles=dict()
-            )
+            self.geometry = AustinGeometry(otherFiles=dict())
         else:
             self.geometry = Geometry()
 

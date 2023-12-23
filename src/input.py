@@ -144,17 +144,18 @@ class SfBayGeometry(Geometry):
         self.region = "SFBay"
         self.crs = "epsg:26910"
         self.unit = "TAZ"
-        self._index = "taz1454"
+        self.index = "taz1454"
         self._path = "geoms/sfbay-tazs-epsg-26910.shp"
         self._otherFiles = otherFiles
 
         self.load()
 
     def zoneToCountyMap(self):
-        return self._gdf.set_index(self._index)["county"].to_dict()
+        return self._gdf.set_index(self.index)["county"].to_dict()
 
     def zoneToRegionTypeMap(self):
-        return self._gdf.set_index(self._index)["areatype10"].to_dict()
+        return self._gdf.set_index(self.index)["areatype10"].to_dict()
+
 
 class AustinGeometry(Geometry):
     def __init__(self, otherFiles: Optional[Dict[str, str]] = None):
@@ -162,14 +163,14 @@ class AustinGeometry(Geometry):
         self.region = "Austin"
         self.crs = "epsg:26910"
         self.unit = "BG"
-        self._index = "TAZ"
+        self.index = "TAZ"
         self._path = "geoms/block_group_austin_26910.shp"
         self._otherFiles = otherFiles
 
         self.load()
 
     def zoneToCountyMap(self):
-        return self._gdf.set_index(self._index)["county"].to_dict()
+        return self._gdf.set_index(self.index)["county"].to_dict()
 
     def zoneToRegionTypeMap(self):
         raise NotImplementedError("No regions defined for Austin")

@@ -888,13 +888,13 @@ class TAZTrafficVolumes(TAZBasedDataFrame):
             outputDataDirectory, labeledLinkStatsFile.inputDirectory, geometry
         )
         self.labeledLinkStatsFile = labeledLinkStatsFile
-        self.geoIndex = "taz1454"
-        self.indexedOn = ["taz1454", "hour", "attributeOrigType"]
+        self.geoIndex = geometry.index
+        self.indexedOn = [geometry.index, "hour", "attributeOrigType"]
 
     def load(self):
         return self.labeledLinkStatsFile.process(
             dict(),
-            ["taz1454", "hour", "attributeOrigType"],
+            [self.geometry.index, "hour", "attributeOrigType"],
             {"VMT": "sum", "VHT": "sum"},
         )
 

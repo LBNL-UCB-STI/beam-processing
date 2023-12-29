@@ -560,16 +560,16 @@ class SkimsFile(RawOutputFile):
         distDf = (
             pd.DataFrame(
                 distMat,
-                index=pd.Index(np.arange(1, 1455), name="Origin"),
-                columns=pd.Index(np.arange(1, 1455), name="Destination"),
+                index=pd.Index(np.arange(1, distMat.shape[0]+1), name="Origin"),
+                columns=pd.Index(np.arange(1, distMat.shape[0]+1), name="Destination"),
             )
             .stack()
             .rename("DistanceMiles")
         ).to_frame()
         distDf["transitTravelTimeHours"] = pd.DataFrame(
             transitTimeMat / 100.0 / 60.0,
-            index=pd.Index(np.arange(1, 1455), name="Origin"),
-            columns=pd.Index(np.arange(1, 1455), name="Destination"),
+            index=pd.Index(np.arange(1, distMat.shape[0]+1), name="Origin"),
+            columns=pd.Index(np.arange(1, distMat.shape[0]+1), name="Destination"),
         ).stack()
         super().__init__(inputDirectory, loc, file=distDf)
         sk.close()

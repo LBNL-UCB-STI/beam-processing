@@ -127,7 +127,7 @@ class Geometry:
 
     def load(self):
         self._gdf = gpd.read_file(self._path)
-        if len(self._otherFiles) > 0:
+        if len(self._otherFiles or []) > 0:
             for filepath, key in self._otherFiles.items():
                 otherFile = pd.read_csv(filepath)
                 self._gdf = pd.merge(
@@ -266,6 +266,23 @@ class LinkStatsFile(RawOutputFile):
             "{0}.linkstats.csv.gz".format(iteration),
         ]
         super().__init__(inputDirectory, relativePath, index_col=["link", "hour"])
+        self.iteration = iteration
+
+    def hash(self):
+        """
+        Generates a hash based on the input and class name. Also include whether we've generated it from linkstats or events
+
+        Returns:
+            str: The generated hash.
+        """
+        m = hashlib.md5()
+        for s in (
+            self.inputDirectory.directoryPath,
+            self.__class__.__name__,
+            self.iteration
+        ):
+            m.update(s.encode())
+        return m.hexdigest()
 
 
 class NetworkFile(RawOutputFile):
@@ -335,8 +352,9 @@ class BeamRunInputDirectory(InputDirectory):
         """
         super().__init__(baseFolderName)
         self.eventsFile = EventsFile(self, numberOfIterations)
+        self.numberOfIterations = numberOfIterations
         self.inputPlansFile = InputPlansFile(self)
-        self.linkStatsFile = LinkStatsFile(self, numberOfIterations)
+        self.__linkStatsFile = {numberOfIterations: LinkStatsFile(self, numberOfIterations)}
         if (region is not None) & (geometry is None):
             if region == "SFBay":
                 self.geometry = SfBayGeometry(
@@ -351,6 +369,13 @@ class BeamRunInputDirectory(InputDirectory):
         else:
             self.geometry = geometry
         self.networkFile = NetworkFile(self, self.geometry)
+
+    def linkStatsFile(self, numberOfIterations: Optional[int] = None):
+        if numberOfIterations is None:
+            numberOfIterations = self.numberOfIterations
+        if numberOfIterations not in self.__linkStatsFile:
+            self.__linkStatsFile[numberOfIterations] = LinkStatsFile(self, numberOfIterations)
+        return self.__linkStatsFile[numberOfIterations]
 
 
 class TripUtilitiesFiles(RawOutputFile):

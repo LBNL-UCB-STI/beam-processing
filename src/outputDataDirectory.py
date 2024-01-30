@@ -3,6 +3,7 @@ from multiprocessing import cpu_count
 from typing import Tuple, Dict, Iterable, Optional
 from urllib.error import HTTPError
 import pandas as pd
+import scipy as sp
 
 import urllib3
 from joblib import Parallel, delayed
@@ -45,6 +46,8 @@ from src.outputDataFrame import (
     TAZTrafficVolumes,
     PersonTrips,
     CongestionInfoByYear,
+    NetworkVolumesByLink,
+    NetworkVolumesByLinkByIteration,
 )
 from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
@@ -94,7 +97,7 @@ class BeamOutputData:
             beamRunInputDirectory.append("beamLog.out")
         )
         self.logFileRequest.get_method = lambda: "HEAD"
-        self.logFile = urllib.request.urlopen(self.logFileRequest)
+        # self.logFile = urllib.request.urlopen(self.logFileRequest)
         self.geometry = beamRunInputDirectory.geometry
 
         if collectEvents:
@@ -119,19 +122,32 @@ class BeamOutputData:
         self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
         self.modeEnergy = ModeEnergy(self.outputDataDirectory, self.pathTraversalEvents)
         self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
-            self.outputDataDirectory, self.pathTraversalEvents
+            self.outputDataDirectory,
+            self.pathTraversalEvents,
+            self.beamRunInputDirectory.numberOfIterations,
         )
         self.labeledNetwork = LabeledNetwork(
             self.outputDataDirectory, self.beamRunInputDirectory
         )
         self.labeledLinkStatsFile = LabeledLinkStatsFile(
             self.outputDataDirectory,
-            self.beamRunInputDirectory.linkStatsFile,
+            self.beamRunInputDirectory.linkStatsFile(),
             self.labeledNetwork,
             self.geometry,
         )
         self.tazTrafficVolumes = TAZTrafficVolumes(
             self.outputDataDirectory, self.labeledLinkStatsFile, self.geometry
+        )
+        self.networkVolumesByLink = NetworkVolumesByLink(
+            self.outputDataDirectory,
+            self.beamRunInputDirectory.linkStatsFile(self.beamRunInputDirectory.numberOfIterations),
+            self.labeledNetwork,
+        )
+        self.networkVolumesByLinkByIteration = NetworkVolumesByLinkByIteration(
+            self.outputDataDirectory,
+            self.beamRunInputDirectory,
+            self.labeledNetwork,
+            list(range(self.beamRunInputDirectory.numberOfIterations)),
         )
 
 
@@ -221,9 +237,7 @@ class PilatesOutputData:
 
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
-                self.beamRuns[(yr, it)] = BeamOutputData(
-                    outputDataDirectory, directory
-                )
+                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory)
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
 

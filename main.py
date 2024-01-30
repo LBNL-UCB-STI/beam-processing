@@ -18,7 +18,8 @@ if __name__ == "__main__":
         outputDataDirectory.OutputDataDirectory("output/ausin-2010-base"), directory, region="Austin"
     )
 
-    pilatesData.congestionInfoByYear.toCsv()
+    # pilatesData.congestionInfoByYear.toCsv()
     pilatesData.asimRuns[(2017, 3)].tripPMTByPrimaryPurpose.toCsv()
 
     processedPersonTrips = pilatesData.runInexus(2017, 2)
+    processedPersonTrips.toCsv()

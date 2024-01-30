@@ -574,6 +574,7 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
         self,
         outputDataDirectory: "OutputDataDirectory",
         pathTraversalEvents: PathTraversalEvents,
+        iteration: int,
     ):
         """
         Initializes a ModeVMT instance.
@@ -585,6 +586,7 @@ class LinkStatsFromPathTraversals(OutputDataFrame):
         super().__init__(outputDataDirectory, pathTraversalEvents.inputDirectory)
         self.indexedOn = ["linkId", "hour"]
         self.pathTraversalEvents = pathTraversalEvents
+        self.iteration = iteration
 
     def load(self):
         """
@@ -765,6 +767,9 @@ class TAZBasedDataFrame(OutputDataFrame):
         self.geometry = geometry
         self.geoIndex = "TAZ"  # TODO: Generalize this
 
+    def setGeometry(self, geom: Geometry):
+        self.geometry = geom
+
     def process(
         self,
         normalize: Optional[Dict[str, str]] = None,
@@ -809,7 +814,6 @@ class TAZBasedDataFrame(OutputDataFrame):
                 .groupby(grouper)
                 .agg(mapping)
             )
-            print("done")
         for col, fn in (normalize or dict()).items():
             outputColumns.add("gacres")
             if fn == "area":
@@ -823,42 +827,26 @@ class TAZBasedDataFrame(OutputDataFrame):
         return temp[list(outputColumns)]
 
 
-class LabeledLinkStatsFile(TAZBasedDataFrame):
+class EitherLinkStatsFile(OutputDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
         source: Union[LinkStatsFromPathTraversals, "LinkStatsFile"],
-        labeledNetwork: LabeledNetwork,
-        geometry: Geometry,
     ):
         self.inputDirectory = source.inputDirectory
-        self.labeledNetwork = labeledNetwork
         assert isinstance(self.inputDirectory, BeamRunInputDirectory)
         self.source = source
         if isinstance(source, LinkStatsFromPathTraversals):
-            super().__init__(outputDataDirectory, source.inputDirectory, geometry)
+            super().__init__(outputDataDirectory, source.inputDirectory)
             # self._raw_df = source.dataFrame
         elif isinstance(source, LinkStatsFile):
-            super().__init__(outputDataDirectory, source.inputDirectory, geometry)
+            super().__init__(outputDataDirectory, source.inputDirectory)
             # self._raw_df = source.file()
         else:
             raise TypeError(
                 "Labeling LinkStats requires either a LinkStatasFromPathTraversals or LinkStatsFile object"
             )
-        self.geoIndex = self.geometry.index
         self.indexedOn = ["link", "hour"]
-
-    def load(self):
-        if isinstance(self.source, LinkStatsFromPathTraversals):
-            # self.source.clearCache()
-            return self.source.dataFrame
-            # self._raw_df = source.dataFrame
-        elif isinstance(self.source, LinkStatsFile):
-            return self.source.file()
-        return None
-
-    def preprocess(self, df):
-        return mergeLinkstatsWithNetwork(df, self.labeledNetwork.dataFrame, self.geometry.index)
 
     def hash(self):
         """
@@ -872,9 +860,82 @@ class LabeledLinkStatsFile(TAZBasedDataFrame):
             self.inputDirectory.directoryPath,
             self.__class__.__name__,
             self.source.__class__.__name__,
+            str(self.source.iteration),
         ):
             m.update(s.encode())
         return m.hexdigest()
+
+    def load(self):
+        if isinstance(self.source, LinkStatsFromPathTraversals):
+            # self.source.clearCache()
+            return self.source.dataFrame
+            # self._raw_df = source.dataFrame
+        elif isinstance(self.source, LinkStatsFile):
+            return self.source.file()
+        return None
+
+
+class NetworkVolumesByLinkByIteration(OutputDataFrame):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        inputDirectory: BeamRunInputDirectory,
+        labeledNetwork: LabeledNetwork,
+        iterations: List[int],
+        inputType: Optional[str] = "linkStats",
+    ):
+        super().__init__(outputDataDirectory, inputDirectory)
+        self.labeledNetwork = labeledNetwork
+        self.iterations = iterations
+        self.inputType = inputType
+
+    def load(self) -> pd.DataFrame:
+        temp = dict()
+        if self.inputType.lower() == "linkstats":
+            for it in self.iterations:
+                ls = self.inputDirectory.linkStatsFile(it)
+                temp["Iteration " + str(it)] = NetworkVolumesByLink(
+                    self.outputDataDirectory, ls, self.labeledNetwork
+                ).dataFrame["vht"]
+        return pd.concat(temp, axis=1)
+
+
+class NetworkVolumesByLink(EitherLinkStatsFile):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        source: Union[LinkStatsFromPathTraversals, "LinkStatsFile"],
+        labeledNetwork: LabeledNetwork,
+    ):
+        super().__init__(outputDataDirectory, source)
+        self.labeledNetwork = labeledNetwork
+
+    def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
+        look = self.load()
+        look["VHT"] = look.traveltime * look.volume
+        return look["VHT"].unstack("hour").sum(axis=1).to_frame(name="vht")
+
+
+class LabeledLinkStatsFile(TAZBasedDataFrame, EitherLinkStatsFile):
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        source: Union[LinkStatsFromPathTraversals, "LinkStatsFile"],
+        labeledNetwork: LabeledNetwork,
+        geometry: Geometry,
+    ):
+        self.inputDirectory = source.inputDirectory
+        self.labeledNetwork = labeledNetwork
+        assert isinstance(self.inputDirectory, BeamRunInputDirectory)
+        self.source = source
+        super().__init__(outputDataDirectory, source, geometry)
+        self.geoIndex = self.geometry.index
+        self.indexedOn = ["link", "hour"]
+
+    def preprocess(self, df):
+        return mergeLinkstatsWithNetwork(
+            df, self.labeledNetwork.dataFrame, self.geometry.index
+        )
 
 
 class TAZTrafficVolumes(TAZBasedDataFrame):

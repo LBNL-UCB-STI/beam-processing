@@ -7,20 +7,27 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 from shapely.geometry import Point, LineString
+import os
+import matplotlib
 
+matplotlib.use("TkAgg")
+os.chdir("../")
 scenarioToLoc = {
-    "newmap-jdeq-0.11": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.11__2023-11-02_23-15-20_nys",
-    "newmap-jdeq-0.09": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.09__2023-11-02_23-11-42_puf",
-    "newmap-jdeq-0.07": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.07__2023-11-10_17-49-43_vgu",
-    "newmap-jdeq-0.05": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.07__2023-11-03_17-42-41_xlr",
-    "newmap-jdeq-0.035": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.035__2023-11-03_17-44-48_jed",
-    "newmap-bpr-0.035": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-bpr-0.035__2023-11-02_23-12-00_wnu",
-    "newmap-bpr-0.03": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-bpr-0.03__2023-11-02_23-12-04_mki",
-    "oldmap-jdeq-0.09": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-oldmap-jdeq-0.09__2023-11-02_23-49-53_cwa",
-    "oldmap-jdeq-0.07": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-oldmap-jdeq-0.07__2023-11-09_20-13-34_vxr",
-    "oldmap-bpr-0.033": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-oldmap-bpr-0.033__2023-11-02_23-48-29_kcx",
-    "newfixed-jdeq-0.07": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.07__2024-01-26_00-30-11_fgz",
-    # "newfixed-jdeq-0.035": "https://storage.googleapis.com/beam-core-outputs/output/testing/beamville__2023-12-01_22-37-13_wid",
+    # "simp": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07__2024-02-14_16-07-00_lsg",
+    # "simp2": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07__2024-02-20_21-00-10_xba",
+    "simpmulti7": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07-storage-5__2024-03-27_09-49-22_nca",
+    "simpwarmest7": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07-storage-5__2024-03-18_23-27-24_irs",
+    "simpwarmestest7": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07-storage-5__2024-03-21_09-18-13_lrl",
+    "simpwarm7": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07-storage-5__2024-03-13_21-11-13_hvh",
+    "simpwarmer7": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.07-storage-5__2024-03-15_23-08-52_bzo",
+    "simpwarm6": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.06-storage-5__2024-03-12_04-52-34_svh",
+    "simpwarmer6": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.06-storage-5__2024-03-18_22-56-31_xwy",
+    # "simpwarmer6": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.06-storage-5__2024-03-07_15-21-13_voe",
+    # "simpwarm55": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.055-storage-5__2024-03-07_15-12-01_sbn",
+    # "simpwarm5": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-simp-jdeq-0.05-storage-5-multijdeqsim__2024-03-08_15-23-58_vvg",
+    # "psimp": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-psimp-jdeq-0.07-0.5__2024-02-15_19-59-31_qbf",
+    # "res": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-res-jdeq-0.07__2024-02-14_17-26-14_gcj",
+    # "psimpnores": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-psimpnores-jdeq-0.07-0.5__2024-02-15_23-13-23_kja",
 }
 
 results = dict()
@@ -28,35 +35,47 @@ moreResults = dict()
 linkData = dict()
 
 for folder, path in scenarioToLoc.items():
+    if folder == "simpwarm55":
+        n = 8
+    elif folder == "simpwarmer6":
+        n = 7
+    elif folder == "simpwarmestest7":
+        n = 9
+    elif folder == "simpmulti7":
+        n = 2
+    else:
+        n = 10
     beamDirectory = input.BeamRunInputDirectory(
-        path, numberOfIterations=10, region="SFBay"
+        path, numberOfIterations=n, region="SFBay"
     )
     beamData = outputDataDirectory.BeamOutputData(
         outputDataDirectory.OutputDataDirectory("output/{0}".format(folder)),
         beamDirectory,
     )
-    # beamData.tazTrafficVolumes.toCsv()
-    # results[folder] = beamData.tazTrafficVolumes.dataFrame
-    if folder.endswith("7"):
-        try:
-            linkData[folder] = beamData.labeledLinkStatsFile.dataFrame
-        except urllib.error.URLError:
-            print("Missing {0}".format(folder))
-        moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
-    elif folder.endswith("bpr-0.035"):
-        moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
-    elif folder.endswith("bpr-0.033"):
-        moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
+    results[folder] = beamData.tazTrafficVolumes.dataFrame
+    linkData[folder] = beamData.labeledLinkStatsFile.dataFrame
+    moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
 
-for path, df in linkData.items():
-    df["VHTperMile"] = df["VHT"] / df["length"] * 1609.34
-    df = df.loc[df["VHT"] > 100.0, :]
-    df["mph"] = df["VMT"] / df["VHT"]
-    srtd = df.sort_values("VHT", ascending=False)
-    smaller = srtd.loc[~srtd.reset_index()["link"].duplicated().values, :]
-    net = beamData.labeledNetwork.dataFrame
-    net = net.merge(smaller, on="link")
-    gdf = gpd.GeoDataFrame(net, geometry=getGeometry(net))
+
+# for path, df in linkData.items():
+#     df["VHTperMile"] = df["VHT"] / df["length"] * 1609.34
+#     df = df.loc[df["VHT"] > 100.0, :]
+#     df["mph"] = df["VMT"] / df["VHT"]
+#     srtd = df.sort_values("VHT", ascending=False)
+#     smaller = srtd.loc[~srtd.reset_index()["link"].duplicated().values, :]
+#     net = beamData.labeledNetwork.dataFrame
+#     net = net.merge(smaller, on="link")
+#     gdf = gpd.GeoDataFrame(net, geometry=getGeometry(net))
+
+"""
+res = results['simpwarm55']
+look = res.groupby(['hour','attributeOrigType']).apply(lambda x: x['VMT'].sum() / x['VHT'].sum()).unstack()
+look.iloc[:25,:].plot()
+
+ld = linkData["simpwarm55"]
+ld['delay'] = ld['VHT'] / (ld['volume'] * ld['length'] / ld['freespeed'] /3600.0)
+byLink = ld.groupby('link').agg({'delay':'sum', "attributeOrigType":'first',"attributeOrigId":'first','linkCapacity':'first','numberOfLanes':'first','volume':'sum'}).sort_values('delay', ascending=False)
+"""
 
 
 def getGeometry(df):
@@ -78,12 +97,20 @@ def getPoint(df, x, y):
 
 
 errorIter = dict()
+totTT = dict()
 for path, df in moreResults.items():
+    if (path == "simpwarm55") | (path == "simpwarmer6"):
+        n = 7
+    elif path == "simpmulti7":
+        n = 2
+    else:
+        n = 10
     res = []
-    for i in range(9):
+    for i in range(n - 1):
         a = (df.iloc[:, i] - df.iloc[:, i + 1]) ** 2.0
         res.append(np.sqrt(np.mean(a)))
     errorIter[tuple(path.split("-"))] = np.array(res)
+    totTT[tuple(path.split("-"))] = df.sum(axis=0)
 
 byTAZ = dict()
 byType = dict()
@@ -123,9 +150,24 @@ hoursByType = pd.concat(hoursByType)
 milesByType = pd.concat(milesByType)
 speedTot = pd.concat(speedTot)
 
+df = linkData["simpwarm"]
+df["delay"] = df["VHT"] - (df["volume"] * df["length"] / df["freespeed"] / 3600.0)
+linkTots = df.groupby("link").agg(
+    {
+        "VHT": sum,
+        "VMT": sum,
+        "delay": sum,
+        "linkFreeSpeed": "first",
+        "attributeOrigId": "first",
+        "attributeOrigType": "first",
+        "linkCapacity": "first",
+    }
+)
+look = linkTots.sort_values("delay", ascending=False).head(200)
+
 fig, axs = plt.subplots(2, 4)
 for idx, hw in enumerate(["motorway", "trunk", "primary", "secondary"]):
-    speedByType.loc[pd.IndexSlice[:, :, :, hw], :].iloc[:, :30].unstack(
+    speedByType.loc[pd.IndexSlice[:, :, :, :, hw], :].iloc[:, :30].unstack(
         [1, 2, 0]
     ).stack(0).loc[hw, ("jdeq", "0.07")].plot(ax=axs[0, idx], legend=False)
     axs[0, idx].set_ylim([10, 70])

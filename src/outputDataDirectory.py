@@ -15,6 +15,7 @@ from src.input import (
     SfBayGeometry,
     Geometry,
     AustinGeometry,
+    SeattleGeometry,
 )
 from src.outputDataFrame import (
     PathTraversalEvents,
@@ -48,6 +49,20 @@ from src.outputDataFrame import (
     CongestionInfoByYear,
     NetworkVolumesByLink,
     NetworkVolumesByLinkByIteration,
+    TripsByYear,
+    TripPMTByPrimaryPurposeByYear,
+    ModePMT,
+    ModePMTByYear,
+    TripModeCountByIteration,
+    ModePMTByIteration,
+    ReplanningEventReasons,
+    ReplanningEventReasonByIteration,
+    ScoreStats,
+    ScoreStatsByIteration,
+    TourModeCountByIteration,
+    TourModeCountByYear,
+    TourModeCount,
+    ProcessedToursFile,
 )
 from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
@@ -121,6 +136,13 @@ class BeamOutputData:
 
         self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
         self.modeEnergy = ModeEnergy(self.outputDataDirectory, self.pathTraversalEvents)
+        self.modePMT = ModePMT(self.outputDataDirectory, self.pathTraversalEvents)
+        self.replanningEventReasons = ReplanningEventReasons(
+            self.outputDataDirectory, self.beamRunInputDirectory
+        )
+        self.scoreStats = ScoreStats(
+            self.outputDataDirectory, self.beamRunInputDirectory
+        )
         self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
             self.outputDataDirectory,
             self.pathTraversalEvents,
@@ -140,7 +162,9 @@ class BeamOutputData:
         )
         self.networkVolumesByLink = NetworkVolumesByLink(
             self.outputDataDirectory,
-            self.beamRunInputDirectory.linkStatsFile(self.beamRunInputDirectory.numberOfIterations),
+            self.beamRunInputDirectory.linkStatsFile(
+                self.beamRunInputDirectory.numberOfIterations
+            ),
             self.labeledNetwork,
         )
         self.networkVolumesByLinkByIteration = NetworkVolumesByLinkByIteration(
@@ -167,7 +191,7 @@ class ActivitySimOutputData:
             activitySimRunInputDirectory.append("final_land_use.csv.gz")
         )
         self.logFileRequest.get_method = lambda: "HEAD"
-        self.logFile = urllib.request.urlopen(self.logFileRequest)
+        # self.logFile = urllib.request.urlopen(self.logFileRequest)
 
         self.persons = ProcessedPersonsFile(
             self.outputDataDirectory, self.activitySimRunInputDirectory
@@ -178,6 +202,9 @@ class ActivitySimOutputData:
         )
 
         self.trips = ProcessedTripsFile(
+            self.outputDataDirectory, self.activitySimRunInputDirectory
+        )
+        self.tours = ProcessedToursFile(
             self.outputDataDirectory, self.activitySimRunInputDirectory
         )
 
@@ -193,6 +220,9 @@ class ActivitySimOutputData:
         )
         self.tripModeCount = TripModeCount(
             self.outputDataDirectory, self.trips, self.geometry
+        )
+        self.tourModeCount = TourModeCount(
+            self.outputDataDirectory, self.tours, self.geometry
         )
         self.tripModeCountByOrigin = TripModeCountByOrigin(
             self.outputDataDirectory, self.trips, self.geometry
@@ -224,6 +254,8 @@ class PilatesOutputData:
             )
         elif region == "Austin":
             self.geometry = AustinGeometry(otherFiles=dict())
+        elif region == "Seattle":
+            self.geometry = SeattleGeometry(otherFiles=dict())
         else:
             self.geometry = Geometry()
 
@@ -251,19 +283,43 @@ class PilatesOutputData:
         self.tripPMTPerYear = TripPMTByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
         )
+        self.tripPMTByPrimaryPurposePerYear = TripPMTByPrimaryPurposeByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
         self.tripPMTByCountyPerYear = TripPMTByCountyByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
         )
         self.tripModeCountPerYear = TripModeCountByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
         )
+        self.tourModeCountPerYear = TourModeCountByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
+        self.tripModeCountPerIteration = TripModeCountByIteration(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
+        self.tourModeCountPerIteration = TourModeCountByIteration(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
         self.tripModeCountByCountyPerYear = TripModeCountByCountyByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+        )
+        self.replanningEventReasonPerIteration = ReplanningEventReasonByIteration(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.scoreStatsByIteration = ScoreStatsByIteration(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.modeVMTPerYear = ModeVMTByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.modeEnergyPerYear = ModeEnergyByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.modePMTPerYear = ModePMTByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.modePMTPerIteration = ModePMTByIteration(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.congestionInfoByYear = CongestionInfoByYear(
@@ -376,6 +432,9 @@ class PilatesAnalysis:
         self._pmtByPurpose = dict()
         self._modeVMT = dict()
         self._modeEnergy = dict()
+        self._modePMT = dict()
+        self._personTrips = dict()
+        self.inexus = dict()
         """      
         # Here's an example of how to group by county and road type
         look = self._runs["base"].beamRuns[(2010, -1)].tazTrafficVolumes
@@ -385,6 +444,21 @@ class PilatesAnalysis:
             {"VMT": "sum", "VHT": "sum"},
         )
         """
+
+    def runInexus(self):
+        for ps in self.allPilatesSettings:
+            self.inexus[ps.scenarioName] = self._runs[ps.scenarioName].runInexus(
+                ps.years[-1], ps.asimLiteIteratsions
+            )
+
+    # @property
+    # def personTrips(self):
+    #     if len(self._pops) == 0:
+    #         for scenarioName, data in self._runs.items():
+    #             self._personTrips[scenarioName] = data.tripsByYear.dataFrame
+    #     return pd.concat(
+    #         self._personTrips, names=["scenario"] + self._pops[scenarioName].index.names
+    #     )
 
     @property
     def populationByTaz(self):
@@ -401,12 +475,12 @@ class PilatesAnalysis:
     def populationByRegionType(self):
         if len(self._popsByRegionType) == 0:
             for scenarioName, data in self._runs.items():
-                self._popsByRegionType[
-                    scenarioName
-                ] = data.mandatoryLocationsByTazByYear.process(
-                    normalize={"population": "area", "jobs": "area"},
-                    aggregateBy=["areatype10", "year"],
-                    mapping={"population": "sum", "jobs": "sum"},
+                self._popsByRegionType[scenarioName] = (
+                    data.mandatoryLocationsByTazByYear.process(
+                        normalize={"population": "area", "jobs": "area"},
+                        aggregateBy=["areatype10", "year"],
+                        mapping={"population": "sum", "jobs": "sum"},
+                    )
                 )
         return pd.concat(
             self._popsByRegionType,
@@ -417,12 +491,12 @@ class PilatesAnalysis:
     def populationByCountyAndRegionType(self):
         if len(self._popsByCountyAndRegionType) == 0:
             for scenarioName, data in self._runs.items():
-                self._popsByCountyAndRegionType[
-                    scenarioName
-                ] = data.mandatoryLocationsByTazByYear.process(
-                    normalize={"population": "area", "jobs": "area"},
-                    aggregateBy=["county", "areatype10", "year"],
-                    mapping={"population": "sum", "jobs": "sum"},
+                self._popsByCountyAndRegionType[scenarioName] = (
+                    data.mandatoryLocationsByTazByYear.process(
+                        normalize={"population": "area", "jobs": "area"},
+                        aggregateBy=["county", "areatype10", "year"],
+                        mapping={"population": "sum", "jobs": "sum"},
+                    )
                 )
         return pd.concat(
             self._popsByCountyAndRegionType,
@@ -434,12 +508,12 @@ class PilatesAnalysis:
     def populationByCounty(self):
         if len(self._popsByCounty) == 0:
             for scenarioName, data in self._runs.items():
-                self._popsByCounty[
-                    scenarioName
-                ] = data.mandatoryLocationsByTazByYear.process(
-                    normalize={"population": "area", "jobs": "area"},
-                    aggregateBy=["county", "year"],
-                    mapping={"population": "sum", "jobs": "sum"},
+                self._popsByCounty[scenarioName] = (
+                    data.mandatoryLocationsByTazByYear.process(
+                        normalize={"population": "area", "jobs": "area"},
+                        aggregateBy=["county", "year"],
+                        mapping={"population": "sum", "jobs": "sum"},
+                    )
                 )
         return pd.concat(
             self._popsByCounty,
@@ -453,20 +527,49 @@ class PilatesAnalysis:
                 self._modechoices[scenarioName] = data.tripModeCountPerYear.dataFrame
         return pd.concat(
             self._modechoices,
-            names=["scenario"] + data.tripModeCountPerYear.dataFrame.index.names,
+            names=["scenario"]
+            + list(self._runs.values())[0].tripModeCountPerYear.dataFrame.index.names,
+        )
+
+    @property
+    def tourModeCount(self):
+        if len(self._modechoices) == 0:
+            for scenarioName, data in self._runs.items():
+                self._modechoices[scenarioName] = data.tourModeCountPerYear.dataFrame
+        return pd.concat(
+            self._modechoices,
+            names=["scenario"]
+            + list(self._runs.values())[0].tourModeCountPerYear.dataFrame.index.names,
+        )
+
+    @property
+    def pmtByPurpose(self):
+        if len(self._pmtByPurpose) == 0:
+            for scenarioName, data in self._runs.items():
+                self._pmtByPurpose[scenarioName] = (
+                    data.tripPMTByPrimaryPurposePerYear.dataFrame
+                )
+        return pd.concat(
+            self._pmtByPurpose,
+            names=["scenario"]
+            + list(self._runs.values())[
+                0
+            ].tripPMTByPrimaryPurposePerYear.dataFrame.index.names,
         )
 
     @property
     def tripModeCountByCounty(self):
         if len(self._modeChoicesByCounty) == 0:
             for scenarioName, data in self._runs.items():
-                self._modeChoicesByCounty[
-                    scenarioName
-                ] = data.tripModeCountByCountyPerYear.dataFrame
+                self._modeChoicesByCounty[scenarioName] = (
+                    data.tripModeCountByCountyPerYear.dataFrame
+                )
         return pd.concat(
             self._modeChoicesByCounty,
             names=["scenario"]
-            + data.tripModeCountByCountyPerYear.dataFrame.index.names,
+            + list(self._runs.values())[
+                0
+            ].tripModeCountByCountyPerYear.dataFrame.index.names,
         )
 
     @property
@@ -479,7 +582,8 @@ class PilatesAnalysis:
                     continue
         return pd.concat(
             {key: val for key, val in self._modeVMT.items() if len(val) > 0},
-            names=["scenario"] + data.modeVMTPerYear.dataFrame.index.names,
+            names=["scenario"]
+            + list(self._runs.values())[0].modeVMTPerYear.dataFrame.index.names,
         )
 
     @property
@@ -492,5 +596,20 @@ class PilatesAnalysis:
                     continue
         return pd.concat(
             {key: val for key, val in self._modeEnergy.items() if len(val) > 0},
-            names=["scenario"] + data.modeEnergyPerYear.dataFrame.index.names,
+            names=["scenario"]
+            + list(self._runs.values())[0].modeEnergyPerYear.dataFrame.index.names,
+        )
+
+    @property
+    def pmtByMode(self):
+        if len(self._modePMT) == 0:
+            for scenarioName, data in self._runs.items():
+                try:
+                    self._modePMT[scenarioName] = data.modePMTPerYear.dataFrame
+                except HTTPError:
+                    continue
+        return pd.concat(
+            {key: val for key, val in self._modePMT.items() if len(val) > 0},
+            names=["scenario"]
+            + list(self._runs.values())[0].modePMTPerYear.dataFrame.index.names,
         )

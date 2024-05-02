@@ -70,6 +70,14 @@ def fixPathTraversals(PTs: pd.DataFrame):
     PTs.loc[PTs["mode_extended"] == "car", "occupancy"] += 1
     PTs.loc[PTs["mode_extended"] == "walk", "occupancy"] = 1
     PTs.loc[PTs["mode_extended"] == "bike", "occupancy"] = 1
+    PTs.loc[PTs["mode_extended"] == "car_hov2", "occupancy"] = 2
+    PTs.loc[PTs["mode_extended"] == "car_hov3", "occupancy"] = 3
+    PTs.loc[
+        (PTs["occupancy"] == 2) & (PTs["mode_extended"] == "car"), "mode_extended"
+    ] = "car_hov2"
+    PTs.loc[
+        (PTs["occupancy"] == 3) & (PTs["mode_extended"] == "car"), "mode_extended"
+    ] = "car_hov3"
     PTs["vehicleMiles"] = PTs["length"] / 1609.34
     PTs["passengerMiles"] = (PTs["length"] * PTs["occupancy"]) / 1609.34
     PTs["totalEnergyInJoules"] = PTs["primaryFuel"] + PTs["secondaryFuel"]
@@ -153,6 +161,34 @@ def filterTrips(trips: pd.DataFrame):
             "mode_choice_logsum",
         ],
     ].copy()
+
+
+def filterTours(tours: pd.DataFrame):
+    if tours is not None:
+        return tours[
+            [
+                "person_id",
+                "tour_type",
+                "tour_category",
+                "number_of_participants",
+                "destination",
+                "origin",
+                "household_id",
+                "start",
+                "end",
+                "duration",
+                "composition",
+                "destination_logsum",
+                "tour_mode",
+                "mode_choice_logsum",
+                "atwork_subtour_frequency",
+                "parent_tour_id",
+                "stop_frequency",
+                "primary_purpose",
+            ]
+        ].copy()
+    else:
+        return pd.DataFrame()
 
 
 def doInexus(dfs: dict):
@@ -762,7 +798,9 @@ def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame, taz_column
     return pd.DataFrame(gdf.drop(columns=["geometry", "index_right"]))
 
 
-def mergeLinkstatsWithNetwork(linkStats: pd.DataFrame, network: pd.DataFrame, index: str):
+def mergeLinkstatsWithNetwork(
+    linkStats: pd.DataFrame, network: pd.DataFrame, index: str
+):
     linkStats["VMT"] = linkStats["volume"] * linkStats["length"] / 1609.34
     linkStats["VHT"] = linkStats["volume"] * linkStats["traveltime"] / 3600.0
     out = linkStats.merge(network, left_on="link", right_index=True)

@@ -39,7 +39,44 @@ settings = [
 ]
 settings[2].beamIterations = 1
 settings[4].beamIterations = 1
+settings[0].beamIterations = 0
 scenario = outputDataDirectory.PilatesAnalysis(allPilatesSettings=settings)
+
+pc = scenario.pmtByPurpose
+pc2 = pc.unstack(["mode", "primary_purpose"])
+pc = pc.unstack("mode")
+pc = pc["distanceInMiles"]
+
+
+vmtByMode = scenario.vmtByMode
+
+pmtByMode = scenario.pmtByMode
+energyByMode = scenario.energyByMode
+
+
+trueEnergy = energyByMode.unstack("mode")["totalEnergyInJoules"][
+    ["car", "car_hov2", "car_hov3", "car_RideHail"]
+].sum(axis=1)
+
+energyIntensity = energyByMode.unstack("mode")["totalEnergyInJoules"] / vmtByMode[
+    "vehicleMiles"
+].unstack("mode")
+pc["Energy"] = (
+    4.207660e06 * pc["SOV"] + 1761080.6994296373 * pc["HOV"] + 5.154538e06 * pc["TNC"]
+)
+energyByPurpose = pc["Energy"].copy().unstack("primary_purpose")
+totEnergy = energyByPurpose.sum(axis=1)
+
+totEnergy2 = (
+    pmtByMode.unstack("mode")["passengerMiles"]["car"] * energyIntensity["car"]
+    + pmtByMode.unstack("mode")["passengerMiles"]["car_RideHail"]
+    * energyIntensity["car_RideHail"]
+    + pmtByMode.unstack("mode")["passengerMiles"]["car_hov2"]
+    * energyIntensity["car_hov2"] / 2.0
+    + pmtByMode.unstack("mode")["passengerMiles"]["car_hov3"]
+    * energyIntensity["car_hov3"] / 3.0
+)
+scenario.runInexus()
 
 popByTaz = scenario.populationByTaz
 popByRegionType = scenario.populationByRegionType
@@ -49,10 +86,7 @@ mcCounty = scenario.tripModeCountByCounty
 popByCounty = scenario.populationByCounty
 
 
-vmtByMode = scenario.vmtByMode
-energyByMode = scenario.energyByMode
-
-print('done')
+print("done")
 # OLD STUFF
 """vmtByMode.to_csv("LKSDFJSDLFKJSDF.csv")
 

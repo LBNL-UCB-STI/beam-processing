@@ -1,8 +1,17 @@
 import hashlib
 import os
+import pathlib
+import subprocess
+from gzip import BadGzipFile
 from io import BytesIO, StringIO
 from typing import Iterable, Optional, Dict
+from urllib.error import HTTPError, URLError
 from zipfile import ZipFile
+import requests
+from google.cloud import storage
+
+
+from tables import HDF5ExtError
 from tqdm import tqdm
 import shutil
 
@@ -86,10 +95,44 @@ class RawOutputFile:
                 self._file = pd.read_csv(
                     self.filePath, index_col=self.index_col, dtype=None
                 )
-            except FileNotFoundError:
+                if self._file.columns[0].startswith("<!"):
+                    # Catch reading an html file as a table
+                    raise pd.errors.ParserError
+            except (FileNotFoundError, HTTPError):
                 print("File at {0} does not exist".format(self.filePath))
                 return None
+            except (BadGzipFile, pd.errors.ParserError) as e:
+                print("Initial download failed")
+                bucket = storage.Client().get_bucket(self.filePath.split("/")[3])
+                blob = bucket.get_blob("/".join(self.filePath.split("/")[4:]))
+                if blob is not None:
+                    if self.filePath.endswith("gz"):
+                        fmt = ".csv.gz"
+                    else:
+                        fmt = ".csv"
+                    path = pathlib.Path.cwd().joinpath(".tmp", self.hash() + fmt)
+                    print("Downloading file from gcloud to {0}".format(path))
+                    blob.download_to_filename(path)
+
+                    self._file = pd.read_csv(path, index_col=self.index_col, dtype=None)
+                    print("Success! Deleting temporary file")
+                    os.remove(path)
+                else:
+                    print("Giving up!")
+                    return None
         return self._file
+
+    def hash(self):
+        """
+        Generates a hash based on the input and class name. Also include whether we've generated it from linkstats or events
+
+        Returns:
+            str: The generated hash.
+        """
+        m = hashlib.md5()
+        for s in (self.inputDirectory.directoryPath, self.__class__.__name__):
+            m.update(s.encode())
+        return m.hexdigest()
 
     def isDefined(self):
         """
@@ -174,6 +217,35 @@ class AustinGeometry(Geometry):
 
     def zoneToRegionTypeMap(self):
         raise NotImplementedError("No regions defined for Austin")
+
+
+class SeattleGeometry(Geometry):
+    def __init__(self, otherFiles: Optional[Dict[str, str]] = None):
+        super().__init__()
+        self.region = "Seattle"
+        self.crs = "epsg:32048"
+        self.unit = "BG"
+        self.index = "OBJECTID"
+        self._path = "geoms/block-groups-32048.shp"
+        self._otherFiles = otherFiles
+
+        self.load()
+
+    def zoneToCountyMap(self):
+        return self._gdf.set_index(self.index)["county"].to_dict()
+
+    def zoneToRegionTypeMap(self):
+        raise NotImplementedError("No regions defined for Seattle")
+
+    def load(self):
+        self._gdf = gpd.read_file(self._path)
+        if len(self._otherFiles or []) > 0:
+            for filepath, key in self._otherFiles.items():
+                otherFile = pd.read_csv(filepath)
+                self._gdf = pd.merge(
+                    self._gdf, otherFile, left_on=self.index, right_on=key
+                )
+        self._gdf.rename(columns={"county_nam": "county"}, inplace=True)
 
 
 class EventsFile(RawOutputFile):
@@ -268,22 +340,6 @@ class LinkStatsFile(RawOutputFile):
         super().__init__(inputDirectory, relativePath, index_col=["link", "hour"])
         self.iteration = iteration
 
-    def hash(self):
-        """
-        Generates a hash based on the input and class name. Also include whether we've generated it from linkstats or events
-
-        Returns:
-            str: The generated hash.
-        """
-        m = hashlib.md5()
-        for s in (
-            self.inputDirectory.directoryPath,
-            self.__class__.__name__,
-            self.iteration
-        ):
-            m.update(s.encode())
-        return m.hexdigest()
-
 
 class NetworkFile(RawOutputFile):
     """
@@ -325,6 +381,82 @@ class InputPlansFile(RawOutputFile):
         super().__init__(inputDirectory, relativePath)
 
 
+class ReplanningEventReasonFile(RawOutputFile):
+    """
+    Represents all replanning events in BEAM
+
+    Attributes:
+        (inherits attributes from OutputFile)
+    """
+
+    def __init__(self, inputDirectory: InputDirectory):
+        """
+        Initializes an InputPlansFile instance.
+
+        Parameters:
+            inputDirectory (InputDirectory): The output directory where the file will be stored.
+        """
+        relativePath = "replanningEventReason.csv"
+        super().__init__(inputDirectory, relativePath)
+
+
+class ScoreStatsFile(RawOutputFile):
+    """
+    Keeps track of agent scores in a BEAM run
+
+    Attributes:
+        (inherits attributes from OutputFile)
+    """
+
+    def __init__(self, inputDirectory: InputDirectory):
+        """
+        Initializes an InputPlansFile instance.
+
+        Parameters:
+            inputDirectory (InputDirectory): The output directory where the file will be stored.
+        """
+        relativePath = "scorestats.txt"
+        super().__init__(inputDirectory, relativePath)
+
+    def file(self):
+        """
+        Property to lazily load the file and return it.
+
+        Returns:
+            pd.DataFrame: The loaded DataFrame.
+        """
+        if self._file is None:
+            print("Reading file from {0}".format(self.filePath))
+            try:
+                self._file = pd.read_table(
+                    self.filePath, index_col=self.index_col, dtype=None
+                )
+                if self._file.columns[0].startswith("<!"):
+                    raise pd.errors.ParserError
+            except FileNotFoundError:
+                print("File at {0} does not exist".format(self.filePath))
+                return None
+            except pd.errors.ParserError:
+                print("Initial download failed")
+                bucket = storage.Client().get_bucket(self.filePath.split("/")[3])
+                blob = bucket.get_blob("/".join(self.filePath.split("/")[4:]))
+                if blob is not None:
+                    fmt = ".txt"
+                    path = pathlib.Path.cwd().joinpath(".tmp", self.hash() + fmt)
+                    print("Downloading file from gcloud to {0}".format(path))
+                    blob.download_to_filename(path)
+
+                    self._file = pd.read_table(
+                        path, index_col=self.index_col, dtype=None
+                    )
+                    print("Success! Deleting temporary file")
+                    os.remove(path)
+                else:
+                    print("Giving up!")
+                    return None
+        return self._file
+
+
 class BeamRunInputDirectory(InputDirectory):
     """
     Represents an input directory specific to a BEAM run.
@@ -354,7 +486,11 @@ class BeamRunInputDirectory(InputDirectory):
         self.eventsFile = EventsFile(self, numberOfIterations)
         self.numberOfIterations = numberOfIterations
         self.inputPlansFile = InputPlansFile(self)
-        self.__linkStatsFile = {numberOfIterations: LinkStatsFile(self, numberOfIterations)}
+        self.replanningEventReasonFile = ReplanningEventReasonFile(self)
+        self.scoreStatsFile = ScoreStatsFile(self)
+        self.__linkStatsFile = {
+            numberOfIterations: LinkStatsFile(self, numberOfIterations)
+        }
         if (region is not None) & (geometry is None):
             if region == "SFBay":
                 self.geometry = SfBayGeometry(
@@ -364,6 +500,8 @@ class BeamRunInputDirectory(InputDirectory):
                 )
             elif region == "Austin":
                 self.geometry = AustinGeometry(otherFiles=dict())
+            elif region == "Seattle":
+                self.geometry = SeattleGeometry(otherFiles=dict())
             else:
                 self.geometry = Geometry()
         else:
@@ -374,7 +512,9 @@ class BeamRunInputDirectory(InputDirectory):
         if numberOfIterations is None:
             numberOfIterations = self.numberOfIterations
         if numberOfIterations not in self.__linkStatsFile:
-            self.__linkStatsFile[numberOfIterations] = LinkStatsFile(self, numberOfIterations)
+            self.__linkStatsFile[numberOfIterations] = LinkStatsFile(
+                self, numberOfIterations
+            )
         return self.__linkStatsFile[numberOfIterations]
 
 
@@ -431,7 +571,7 @@ class TripUtilitiesFiles(RawOutputFile):
             else:
                 files = os.listdir(os.path.join(folderName, "trip_mode_choice"))
                 print("Reading saved utility files")
-                for file in files:
+                for file in tqdm(files):
                     if file.endswith("utilities.csv"):
                         groupName = file.split("_")[0]
                         df = pd.read_csv(
@@ -448,6 +588,11 @@ class TripUtilitiesFiles(RawOutputFile):
             .index.to_frame()
             .reset_index("division", drop=True)["division"]
             .to_dict()
+        )
+        print(
+            "Returning trip to division mapping for {0} trips".format(
+                len(trip_id_to_division)
+            )
         )
         return trip_id_to_division
 
@@ -573,31 +718,89 @@ class SkimsFile(RawOutputFile):
         Parameters:
             inputDirectory (InputDirectory): The output directory where the file is stored.
         """
-        relativePath = ["activitysim", "data", "data", "skims.omx"]
+
         # TODO: Support local files too
-        loc = ".tmp/skims.omx"
+        loc = ".tmp/" + self.hash(inputDirectory) + ".omx"
         if not os.path.exists(loc):
-            url = inputDirectory.append(relativePath)
-            urllib.request.urlretrieve(url, ".tmp/skims.omx")
+            try:
+                relativePath = ["activitysim", "data", "data", "skims.omx"]
+                url = inputDirectory.append(relativePath)
+                urllib.request.urlretrieve(url, loc)
+            except:
+                try:
+                    relativePath = ["activitysim", "data", "skims.omx"]
+                    url = inputDirectory.append(relativePath)
+                    urllib.request.urlretrieve(url, loc)
+                except:
+                    print('ops')
+                    # relativePath = ["activitysim", "data", "skims.omx"]
+                    # url = os.path.join(inputDirectory.directoryPath.replace("gs://","https://storage.googleapis.com/"), *relativePath)
+                    # urllib.request.urlretrieve(url, loc)
+        else:
+            print('loading skims from ', loc)
         sk = omx.open_file(loc, "r")
         distMat = np.array(sk["SOV_DIST__AM"])
-        transitTimeMat = np.array(sk["WLK_TRN_WLK_IVT__AM"])
+
+        transitModes = ["COM", "LOC", "HVY", "LRF"]
         distDf = (
             pd.DataFrame(
                 distMat,
-                index=pd.Index(np.arange(1, distMat.shape[0]+1), name="Origin"),
-                columns=pd.Index(np.arange(1, distMat.shape[0]+1), name="Destination"),
+                index=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Origin"),
+                columns=pd.Index(
+                    np.arange(1, distMat.shape[0] + 1), name="Destination"
+                ),
             )
             .stack()
             .rename("DistanceMiles")
         ).to_frame()
-        distDf["transitTravelTimeHours"] = pd.DataFrame(
-            transitTimeMat / 100.0 / 60.0,
-            index=pd.Index(np.arange(1, distMat.shape[0]+1), name="Origin"),
-            columns=pd.Index(np.arange(1, distMat.shape[0]+1), name="Destination"),
+        for m in transitModes:
+            transitTimeMat = np.array(sk["WLK_{0}_WLK_TOTIVT__AM".format(m)])
+            distDf["transitTravelTimeHours_" + m] = pd.DataFrame(
+                transitTimeMat / 100.0 / 60.0,
+                index=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Origin"),
+                columns=pd.Index(
+                    np.arange(1, distMat.shape[0] + 1), name="Destination"
+                ),
+            ).stack()
+            transitWaitMat = (
+                np.array(sk["WLK_{0}_WLK_IWAIT__AM".format(m)])
+                + np.array(sk["WLK_{0}_WLK_XWAIT__AM".format(m)])
+                + np.array(sk["WLK_{0}_WLK_WACC__AM".format(m)])
+                + np.array(sk["WLK_{0}_WLK_WEGR__AM".format(m)])
+                + np.array(sk["WLK_{0}_WLK_WAUX__AM".format(m)])
+            )
+            distDf["transitWaitTimeHours_" + m] = pd.DataFrame(
+                transitWaitMat / 100.0 / 60.0,
+                index=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Origin"),
+                columns=pd.Index(
+                    np.arange(1, distMat.shape[0] + 1), name="Destination"
+                ),
+            ).stack()
+        driveTimeMat = np.array(sk["SOV_TIME__AM"])
+        distDf["driveTimeHours"] = pd.DataFrame(
+            driveTimeMat / 100.0 / 60.0,
+            index=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Origin"),
+            columns=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Destination"),
+        ).stack()
+        walkTimeMat = distMat / 2.5
+        distDf["walkTimeHours"] = pd.DataFrame(
+            walkTimeMat / 100.0 / 60.0,
+            index=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Origin"),
+            columns=pd.Index(np.arange(1, distMat.shape[0] + 1), name="Destination"),
         ).stack()
         super().__init__(inputDirectory, loc, file=distDf)
         sk.close()
+
+    def hash(self, inputDirectory=None):
+        if inputDirectory is None:
+            inputDirectory = self.inputDirectory
+        m = hashlib.md5()
+        for s in (
+            inputDirectory.directoryPath,
+            self.__class__.__name__,
+        ):
+            m.update(s.encode())
+        return m.hexdigest()
 
 
 class ActivitySimRunInputDirectory(InputDirectory):
@@ -643,13 +846,18 @@ class PilatesRunInputDirectory(InputDirectory):
         super().__init__(baseFolderName)
         self.asimRuns = dict()
         self.beamRuns = dict()
-        self.skims = SkimsFile(self)
+        try:
+            self.skims = SkimsFile(self)
+        except Exception as e:
+            print("Skipping skims")
         if region == "SFBay":
             self.geometry = SfBayGeometry(
                 otherFiles={
                     "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
                 }
             )
+        elif region == "Seattle":
+            self.geometry = SeattleGeometry(otherFiles=dict())
         elif region == "Austin":
             self.geometry = AustinGeometry(otherFiles=dict())
         else:

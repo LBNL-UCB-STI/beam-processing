@@ -7,20 +7,22 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 from shapely.geometry import Point, LineString
+import os
+import matplotlib
+
+matplotlib.use("TkAgg")
+
+os.chdir("../")
 
 scenarioToLoc = {
-    "newmap-jdeq-0.11": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.11__2023-11-02_23-15-20_nys",
-    "newmap-jdeq-0.09": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.09__2023-11-02_23-11-42_puf",
-    "newmap-jdeq-0.07": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.07__2023-11-10_17-49-43_vgu",
-    "newmap-jdeq-0.05": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.07__2023-11-03_17-42-41_xlr",
-    "newmap-jdeq-0.035": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-jdeq-0.035__2023-11-03_17-44-48_jed",
-    "newmap-bpr-0.035": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-bpr-0.035__2023-11-02_23-12-00_wnu",
-    "newmap-bpr-0.03": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-newmap-bpr-0.03__2023-11-02_23-12-04_mki",
-    "oldmap-jdeq-0.09": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-oldmap-jdeq-0.09__2023-11-02_23-49-53_cwa",
-    "oldmap-jdeq-0.07": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-oldmap-jdeq-0.07__2023-11-09_20-13-34_vxr",
-    "oldmap-bpr-0.033": "https://storage.googleapis.com/beam-core-outputs/output/sfbay/sfbay-oldmap-bpr-0.033__2023-11-02_23-48-29_kcx",
-    "newfixed-jdeq-0.07": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.07__2024-01-26_00-30-11_fgz",
-    # "newfixed-jdeq-0.035": "https://storage.googleapis.com/beam-core-outputs/output/testing/beamville__2023-12-01_22-37-13_wid",
+    "newmap-jdeq-0.08-1.0": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.08__2024-02-09_20-24-32_rgo",
+    "newmap-jdeq-0.09-1.0": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.09__2024-02-09_08-21-32_qiv",
+    "newmap-jdeq-0.08-0.5": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.08-storage-5__2024-02-09_08-19-48_xdk",
+    "newmap-jdeq-0.09-0.5": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.09-storage-5__2024-02-09_08-23-03_qko",
+    "newmap-jdeq-0.09-0.25": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.09-storage-25__2024-02-09_08-24-43_mdn",
+    "newmap-jdeq-0.07-0.5": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.07-storage-5__2024-02-08_01-50-01_guw",
+    "newmap-jdeq-0.07-1.0": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.07__2024-01-26_00-30-11_fgz",
+    "resmap-jdeq-0.07-0.5":"https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-res-jdeq-0.07-0.5__2024-02-15_00-00-01_gqf"
 }
 
 results = dict()
@@ -35,28 +37,20 @@ for folder, path in scenarioToLoc.items():
         outputDataDirectory.OutputDataDirectory("output/{0}".format(folder)),
         beamDirectory,
     )
-    # beamData.tazTrafficVolumes.toCsv()
-    # results[folder] = beamData.tazTrafficVolumes.dataFrame
-    if folder.endswith("7"):
-        try:
-            linkData[folder] = beamData.labeledLinkStatsFile.dataFrame
-        except urllib.error.URLError:
-            print("Missing {0}".format(folder))
-        moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
-    elif folder.endswith("bpr-0.035"):
-        moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
-    elif folder.endswith("bpr-0.033"):
-        moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
+    results[folder] = beamData.tazTrafficVolumes.dataFrame
+    linkData[folder] = beamData.labeledLinkStatsFile.dataFrame
+    moreResults[folder] = beamData.networkVolumesByLinkByIteration.dataFrame
 
-for path, df in linkData.items():
-    df["VHTperMile"] = df["VHT"] / df["length"] * 1609.34
-    df = df.loc[df["VHT"] > 100.0, :]
-    df["mph"] = df["VMT"] / df["VHT"]
-    srtd = df.sort_values("VHT", ascending=False)
-    smaller = srtd.loc[~srtd.reset_index()["link"].duplicated().values, :]
-    net = beamData.labeledNetwork.dataFrame
-    net = net.merge(smaller, on="link")
-    gdf = gpd.GeoDataFrame(net, geometry=getGeometry(net))
+
+# for path, df in linkData.items():
+#     df["VHTperMile"] = df["VHT"] / df["length"] * 1609.34
+#     df = df.loc[df["VHT"] > 100.0, :]
+#     df["mph"] = df["VMT"] / df["VHT"]
+#     srtd = df.sort_values("VHT", ascending=False)
+#     smaller = srtd.loc[~srtd.reset_index()["link"].duplicated().values, :]
+#     net = beamData.labeledNetwork.dataFrame
+#     net = net.merge(smaller, on="link")
+#     gdf = gpd.GeoDataFrame(net, geometry=getGeometry(net))
 
 
 def getGeometry(df):
@@ -78,12 +72,14 @@ def getPoint(df, x, y):
 
 
 errorIter = dict()
+totTT = dict()
 for path, df in moreResults.items():
     res = []
     for i in range(9):
         a = (df.iloc[:, i] - df.iloc[:, i + 1]) ** 2.0
         res.append(np.sqrt(np.mean(a)))
     errorIter[tuple(path.split("-"))] = np.array(res)
+    totTT[tuple(path.split("-"))] = df.sum(axis=0)
 
 byTAZ = dict()
 byType = dict()
@@ -125,7 +121,7 @@ speedTot = pd.concat(speedTot)
 
 fig, axs = plt.subplots(2, 4)
 for idx, hw in enumerate(["motorway", "trunk", "primary", "secondary"]):
-    speedByType.loc[pd.IndexSlice[:, :, :, hw], :].iloc[:, :30].unstack(
+    speedByType.loc[pd.IndexSlice[:, :, :, :, hw], :].iloc[:, :30].unstack(
         [1, 2, 0]
     ).stack(0).loc[hw, ("jdeq", "0.07")].plot(ax=axs[0, idx], legend=False)
     axs[0, idx].set_ylim([10, 70])

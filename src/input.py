@@ -316,6 +316,7 @@ class EventsFile(RawOutputFile):
             )
 
     def clearEvents(self):
+        del self.eventTypes
         self.eventTypes = dict()
 
 

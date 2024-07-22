@@ -721,7 +721,7 @@ class SkimsFile(RawOutputFile):
 
         # TODO: Support local files too
         loc = ".tmp/" + self.hash(inputDirectory) + ".omx"
-        if not os.path.exists(loc):
+        if False:#not os.path.exists(loc):
             try:
                 relativePath = ["activitysim", "data", "data", "skims.omx"]
                 url = inputDirectory.append(relativePath)

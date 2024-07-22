@@ -16,6 +16,7 @@ from src.input import (
     Geometry,
     AustinGeometry,
     SeattleGeometry,
+    InputDirectory,
 )
 from src.outputDataFrame import (
     PathTraversalEvents,
@@ -63,6 +64,9 @@ from src.outputDataFrame import (
     TourModeCountByYear,
     TourModeCount,
     ProcessedToursFile,
+    ModeVHT,
+    PassengerMilesByVehicleAndMode, PassengerMilesByVehicleAndModeByYear, RealizedModeCount,
+    PassengerMilesByVehicleAndModeByIteration, RealizedModeCountByIteration,
 )
 from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
@@ -79,13 +83,21 @@ class OutputDataDirectory:
         self.path = path
 
 
-class BeamOutputData:
+class ModelOutputData:
+    def __init__(
+        self, outputDataDirectory: OutputDataDirectory, inputDirectory: InputDirectory
+    ):
+        self.outputDataDirectory = outputDataDirectory
+        self.inputDirectory = inputDirectory
+
+
+class BeamOutputData(ModelOutputData):
     """
     Represents output data related to a Beam run.
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory.
-        beamRunInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+        inputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         pathTraversalEvents (src.outputDataFrame.PathTraversalEvents): Path traversal events data.
         personEntersVehicleEvents (src.outputDataFrame.PersonEntersVehicleEvents): Person enters vehicle events data.
         modeChoiceEvents (src.outputDataFrame.ModeChoiceEvents): Mode choice events data.
@@ -106,8 +118,9 @@ class BeamOutputData:
             outputDataDirectory (OutputDataDirectory): The output data directory.
             beamRunInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         """
+        super().__init__(outputDataDirectory, beamRunInputDirectory)
+        assert isinstance(self.inputDirectory, BeamRunInputDirectory)
         self.outputDataDirectory = outputDataDirectory
-        self.beamRunInputDirectory = beamRunInputDirectory
         self.logFileRequest = urllib.request.Request(
             beamRunInputDirectory.append("beamLog.out")
         )
@@ -116,44 +129,49 @@ class BeamOutputData:
         self.geometry = beamRunInputDirectory.geometry
 
         if collectEvents:
-            self.beamRunInputDirectory.eventsFile.collectEvents(
+            self.inputDirectory.eventsFile.collectEvents(
                 ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
             )
 
         self.pathTraversalEvents = PathTraversalEvents(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
         self.personEntersVehicleEvents = PersonEntersVehicleEvents(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
         self.modeChoiceEvents = ModeChoiceEvents(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
 
         self.personTrips = PersonTrips(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
+        self.realizedModeCount = RealizedModeCount(self.outputDataDirectory, self.modeChoiceEvents)
 
         self.modeVMT = ModeVMT(self.outputDataDirectory, self.pathTraversalEvents)
+        self.modeVHT = ModeVHT(self.outputDataDirectory, self.pathTraversalEvents)
+        self.passengerMilesByVehicleAndMode = PassengerMilesByVehicleAndMode(
+            self.outputDataDirectory, self.pathTraversalEvents
+        )
         self.modeEnergy = ModeEnergy(self.outputDataDirectory, self.pathTraversalEvents)
         self.modePMT = ModePMT(self.outputDataDirectory, self.pathTraversalEvents)
         self.replanningEventReasons = ReplanningEventReasons(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
         self.scoreStats = ScoreStats(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
         self.linkStatsFromPathTraversals = LinkStatsFromPathTraversals(
             self.outputDataDirectory,
             self.pathTraversalEvents,
-            self.beamRunInputDirectory.numberOfIterations,
+            self.inputDirectory.numberOfIterations,
         )
         self.labeledNetwork = LabeledNetwork(
-            self.outputDataDirectory, self.beamRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
         self.labeledLinkStatsFile = LabeledLinkStatsFile(
             self.outputDataDirectory,
-            self.beamRunInputDirectory.linkStatsFile(),
+            self.inputDirectory.linkStatsFile(),
             self.labeledNetwork,
             self.geometry,
         )
@@ -162,20 +180,20 @@ class BeamOutputData:
         )
         self.networkVolumesByLink = NetworkVolumesByLink(
             self.outputDataDirectory,
-            self.beamRunInputDirectory.linkStatsFile(
-                self.beamRunInputDirectory.numberOfIterations
+            self.inputDirectory.linkStatsFile(
+                self.inputDirectory.numberOfIterations
             ),
             self.labeledNetwork,
         )
         self.networkVolumesByLinkByIteration = NetworkVolumesByLinkByIteration(
             self.outputDataDirectory,
-            self.beamRunInputDirectory,
+            self.inputDirectory,
             self.labeledNetwork,
-            list(range(self.beamRunInputDirectory.numberOfIterations)),
+            list(range(self.inputDirectory.numberOfIterations)),
         )
 
 
-class ActivitySimOutputData:
+class ActivitySimOutputData(ModelOutputData):
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
@@ -183,8 +201,8 @@ class ActivitySimOutputData:
         skims: ProcessedSkimsFile,
         geometry: Optional[Geometry] = Geometry(),
     ):
-        self.outputDataDirectory = outputDataDirectory
-        self.activitySimRunInputDirectory = activitySimRunInputDirectory
+        super().__init__(outputDataDirectory, activitySimRunInputDirectory)
+        assert isinstance(self.inputDirectory, ActivitySimRunInputDirectory)
         self.skims = skims
         self.geometry = geometry
         self.logFileRequest = urllib.request.Request(
@@ -194,18 +212,18 @@ class ActivitySimOutputData:
         # self.logFile = urllib.request.urlopen(self.logFileRequest)
 
         self.persons = ProcessedPersonsFile(
-            self.outputDataDirectory, self.activitySimRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
 
         self.households = ProcessedHouseholdsFile(
-            self.outputDataDirectory, self.activitySimRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
 
         self.trips = ProcessedTripsFile(
-            self.outputDataDirectory, self.activitySimRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
         self.tours = ProcessedToursFile(
-            self.outputDataDirectory, self.activitySimRunInputDirectory
+            self.outputDataDirectory, self.inputDirectory
         )
 
         self.mandatoryLocationsByTaz = MandatoryLocationsByTaz(
@@ -325,6 +343,15 @@ class PilatesOutputData:
         self.congestionInfoByYear = CongestionInfoByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
+        self.passengerMilesByVehicleAndModeByYear = PassengerMilesByVehicleAndModeByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.passengerMilesByVehicleAndModeByIteration = PassengerMilesByVehicleAndModeByIteration(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.realizedModeCountyByIteration = RealizedModeCountByIteration(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
 
     def runInexus(self, year, iter):
         asimRun = self.asimRuns[(year, iter)]
@@ -335,7 +362,7 @@ class PilatesOutputData:
             division_to_persons,
             division_to_households,
             person_id_to_division,
-        ) = asimRun.activitySimRunInputDirectory.getSplitData()
+        ) = asimRun.inputDirectory.getSplitData()
 
         combinedData = beamRun.personTrips.chunk(person_id_to_division)
         mc = combinedData["ModeChoice"]

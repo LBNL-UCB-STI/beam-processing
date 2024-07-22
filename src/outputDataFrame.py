@@ -14,7 +14,6 @@ from src.input import (
     Geometry,
     LinkStatsFile,
 )
-from src.outputDataDirectory import BeamOutputData
 from src.transformations import (
     fixPathTraversals,
     getLinkStats,
@@ -247,7 +246,6 @@ class PathTraversalEvents(OutputDataFrame):
             beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         """
         super().__init__(outputDataDirectory, beamInputDirectory)
-        assert isinstance(beamInputDirectory, BeamOutputData)
         self.beamInputDirectory = beamInputDirectory
         self.indexedOn = "event_id"
 

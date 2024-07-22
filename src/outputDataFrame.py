@@ -92,6 +92,7 @@ class OutputDataFrame:
 
     def clearMemory(self):
         print("Clearing memory!")
+        del self._dataFrame
         self._dataFrame = None
         gc.collect()
 

@@ -302,7 +302,7 @@ class PilatesOutputData:
 
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
-                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory)
+                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory, collectEvents=True)
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
 

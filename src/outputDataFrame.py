@@ -1,3 +1,4 @@
+import gc
 import hashlib
 import os
 from typing import Dict, Tuple, List, Union, Optional, Callable
@@ -88,6 +89,10 @@ class OutputDataFrame:
         if self.cached:
             os.remove(self._diskLocation)
         self._dataFrame = None
+
+    def clearMemory(self):
+        self._dataFrame = None
+        gc.collect()
 
     def load(self):
         """
@@ -524,6 +529,7 @@ class ModeVMT(OutputDataFrame):
             pd.DataFrame: The loaded DataFrame.
         """
         PTs = self.pathTraversalEvents.dataFrame.copy()
+        self.pathTraversalEvents.clearMemory()
         PTs.loc[
             (PTs["occupancy"] == 2) & (PTs["mode_extended"] == "car"), "mode_extended"
         ] = "car_hov2"
@@ -568,6 +574,7 @@ class ModeVHT(OutputDataFrame):
             pd.DataFrame: The loaded DataFrame.
         """
         PTs = self.pathTraversalEvents.dataFrame.copy()
+        self.pathTraversalEvents.clearMemory()
         PTs.loc[
             (PTs["occupancy"] == 2) & (PTs["mode_extended"] == "car"), "mode_extended"
         ] = "car_hov2"
@@ -626,6 +633,7 @@ class PassengerMilesByVehicleAndMode(OutputDataFrame):
             pd.DataFrame: The loaded DataFrame.
         """
         PTs = self.pathTraversalEvents.dataFrame.copy()
+        self.pathTraversalEvents.clearMemory()
         PTs.fillna({'currentTourMode': 'Other'}, inplace=True)
         return PTs
 
@@ -704,6 +712,7 @@ class ModeEnergy(OutputDataFrame):
             pd.DataFrame: The loaded DataFrame.
         """
         PTs = self.pathTraversalEvents.dataFrame.copy()
+        self.pathTraversalEvents.clearMemory()
         PTs.loc[
             (PTs["occupancy"] == 2) & (PTs["mode_extended"] == "car"), "mode_extended"
         ] = "car_hov2"
@@ -750,6 +759,7 @@ class ModePMT(OutputDataFrame):
             pd.DataFrame: The loaded DataFrame.
         """
         PTs = self.pathTraversalEvents.dataFrame.copy()
+        self.pathTraversalEvents.clearMemory()
         PTs.loc[
             (PTs["occupancy"] == 2) & (PTs["mode_extended"] == "car"), "mode_extended"
         ] = "car_hov2"

@@ -491,7 +491,8 @@ class RealizedModeCount(OutputDataFrame):
         self.indexedOn = "mode"
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        return self.modeChoiceEvents.dataFrame.drop_duplicates('tripId', keep='last').value_counts('mode').to_frame('mode')
+        self.modeChoiceEvents.clearMemory()
+        return df.drop_duplicates('tripId', keep='last').value_counts('mode').to_frame('mode')
 
     def load(self):
         return self.modeChoiceEvents.dataFrame

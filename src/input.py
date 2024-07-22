@@ -867,7 +867,7 @@ class PilatesRunInputDirectory(InputDirectory):
         for year in years:
             for asimLiteIteration in [-1, *np.arange(asimLiteIterations) + 1]:
                 relPath = ["activitysim"]
-                if self.isLink:
+                if not self.isLink:
                     relPath.append("output")
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))

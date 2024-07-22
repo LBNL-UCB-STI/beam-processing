@@ -203,6 +203,15 @@ class BeamOutputData(ModelOutputData):
             list(range(self.inputDirectory.numberOfIterations)),
         )
 
+    def collectAllEvents(self):
+        self.inputDirectory.eventsFile.collectEvents(
+            ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
+        )
+        self.pathTraversalEvents.dataFrame
+        self.personEntersVehicleEvents.dataFrame
+        self.modeChoiceEvents.dataFrame
+        self.inputDirectory.eventsFile.clearEvents()
+
 
 class ActivitySimOutputData(ModelOutputData):
     def __init__(
@@ -302,7 +311,7 @@ class PilatesOutputData:
 
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
-                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory, collectEvents=True)
+                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory)
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
 

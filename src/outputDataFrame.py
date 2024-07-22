@@ -14,6 +14,7 @@ from src.input import (
     Geometry,
     LinkStatsFile,
 )
+from src.outputDataDirectory import BeamOutputData
 from src.transformations import (
     fixPathTraversals,
     getLinkStats,
@@ -246,6 +247,7 @@ class PathTraversalEvents(OutputDataFrame):
             beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
         """
         super().__init__(outputDataDirectory, beamInputDirectory)
+        assert isinstance(beamInputDirectory, BeamOutputData)
         self.beamInputDirectory = beamInputDirectory
         self.indexedOn = "event_id"
 
@@ -276,9 +278,7 @@ class PathTraversalEvents(OutputDataFrame):
                     self.beamInputDirectory.eventsFile.filePath,
                 )
             )
-            self.beamInputDirectory.eventsFile.collectEvents(
-                ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
-            )
+            self.beamInputDirectory.collectAllEvents()
         df = self.beamInputDirectory.eventsFile.eventTypes["PathTraversal"]
         # else:
         #     df = self.beamInputDirectory.eventsFile.file()

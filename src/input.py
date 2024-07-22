@@ -869,6 +869,7 @@ class PilatesRunInputDirectory(InputDirectory):
                     "year-{0}-iteration-{1}".format(year, asimLiteIteration),
                 ]
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))
+                print(relPath)
                 self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
                     self.append(relPath), self.geometry
                 )

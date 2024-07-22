@@ -209,11 +209,15 @@ class ActivitySimOutputData(ModelOutputData):
         assert isinstance(self.inputDirectory, ActivitySimRunInputDirectory)
         self.skims = skims
         self.geometry = geometry
-        self.logFileRequest = urllib.request.Request(
-            activitySimRunInputDirectory.append("final_land_use.csv.gz")
-        )
-        self.logFileRequest.get_method = lambda: "HEAD"
-        # self.logFile = urllib.request.urlopen(self.logFileRequest)
+        if self.outputDataDirectory.path.startswith("http") | self.outputDataDirectory.path.startswith("s3") | self.outputDataDirectory.path.startswith("gs"):
+            self.logFileRequest = urllib.request.Request(
+                activitySimRunInputDirectory.append("final_land_use.csv.gz")
+            )
+            self.logFileRequest.get_method = lambda: "HEAD"
+            self.logFile = urllib.request.urlopen(self.logFileRequest)
+        else:
+            self.logFileRequest = None
+            self.logFile = None
 
         self.persons = ProcessedPersonsFile(
             self.outputDataDirectory, self.inputDirectory

@@ -52,8 +52,10 @@ class InputDirectory:
                 return "/".join([self.directoryPath, relativePath])
         else:
             if type(relativePath) in [list, tuple]:
+                print("A", relativePath)
                 return os.path.join(self.directoryPath, relativePath[0], "output", *relativePath[1:])
             elif type(relativePath) is str:
+                print("B", relativePath)
                 return os.path.join(self.directoryPath, "output", relativePath)
 
 
@@ -869,7 +871,6 @@ class PilatesRunInputDirectory(InputDirectory):
                     "year-{0}-iteration-{1}".format(year, asimLiteIteration),
                 ]
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))
-                print(relPath)
                 self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
                     self.append(relPath), self.geometry
                 )

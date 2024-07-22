@@ -872,10 +872,10 @@ class PilatesRunInputDirectory(InputDirectory):
                 self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
                     self.append(relPath), self.geometry
                 )
-                relPath = [
-                    "beam",
-                    "year-{0}-iteration-{1}".format(year, asimLiteIteration),
-                ]
+                relPath = ["beam"]
+                if not self.isLink:
+                    relPath.append("beam_output")
+                relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
                     self.append(relPath), beamIterations, self.geometry
                 )

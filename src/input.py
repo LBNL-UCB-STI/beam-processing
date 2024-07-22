@@ -315,6 +315,9 @@ class EventsFile(RawOutputFile):
                 __listOfFrames.pop(eventType), axis=0
             )
 
+    def clearEvents(self):
+        self.eventTypes = dict()
+
 
 class LinkStatsFile(RawOutputFile):
     """

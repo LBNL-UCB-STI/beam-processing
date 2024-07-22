@@ -148,6 +148,12 @@ class BeamOutputData(ModelOutputData):
             self.outputDataDirectory, self.inputDirectory
         )
 
+        if collectEvents:
+            self.pathTraversalEvents.load()
+            self.personEntersVehicleEvents.load()
+            self.modeChoiceEvents.load()
+            self.inputDirectory.eventsFile.clearEvents()
+
         self.personTrips = PersonTrips(
             self.outputDataDirectory, self.inputDirectory
         )

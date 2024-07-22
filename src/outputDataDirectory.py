@@ -89,6 +89,7 @@ class ModelOutputData:
     ):
         self.outputDataDirectory = outputDataDirectory
         self.inputDirectory = inputDirectory
+        self.remoteResults = inputDirectory.isLink
 
 
 class BeamOutputData(ModelOutputData):
@@ -121,7 +122,7 @@ class BeamOutputData(ModelOutputData):
         super().__init__(outputDataDirectory, beamRunInputDirectory)
         assert isinstance(self.inputDirectory, BeamRunInputDirectory)
         self.outputDataDirectory = outputDataDirectory
-        if self.outputDataDirectory.path.startswith("http") | self.outputDataDirectory.path.startswith("s3") | self.outputDataDirectory.path.startswith("gs"):
+        if self.remoteResults:
             self.logFileRequest = urllib.request.Request(
                 beamRunInputDirectory.append("beamLog.out")
             )
@@ -209,7 +210,7 @@ class ActivitySimOutputData(ModelOutputData):
         assert isinstance(self.inputDirectory, ActivitySimRunInputDirectory)
         self.skims = skims
         self.geometry = geometry
-        if self.outputDataDirectory.path.startswith("http") | self.outputDataDirectory.path.startswith("s3") | self.outputDataDirectory.path.startswith("gs"):
+        if self.remoteResults:
             self.logFileRequest = urllib.request.Request(
                 activitySimRunInputDirectory.append("final_land_use.csv.gz")
             )

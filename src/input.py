@@ -52,10 +52,8 @@ class InputDirectory:
                 return "/".join([self.directoryPath, relativePath])
         else:
             if type(relativePath) in [list, tuple]:
-                print("A", relativePath)
                 return os.path.join(self.directoryPath, *relativePath)
             elif type(relativePath) is str:
-                print("B", relativePath)
                 return os.path.join(self.directoryPath, relativePath)
 
 

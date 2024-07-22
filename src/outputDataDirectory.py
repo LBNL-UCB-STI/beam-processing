@@ -121,11 +121,15 @@ class BeamOutputData(ModelOutputData):
         super().__init__(outputDataDirectory, beamRunInputDirectory)
         assert isinstance(self.inputDirectory, BeamRunInputDirectory)
         self.outputDataDirectory = outputDataDirectory
-        self.logFileRequest = urllib.request.Request(
-            beamRunInputDirectory.append("beamLog.out")
-        )
-        self.logFileRequest.get_method = lambda: "HEAD"
-        # self.logFile = urllib.request.urlopen(self.logFileRequest)
+        if self.outputDataDirectory.path.startswith("http") | self.outputDataDirectory.path.startswith("s3") | self.outputDataDirectory.path.startswith("gs"):
+            self.logFileRequest = urllib.request.Request(
+                beamRunInputDirectory.append("beamLog.out")
+            )
+            self.logFileRequest.get_method = lambda: "HEAD"
+            self.logFile = urllib.request.urlopen(self.logFileRequest)
+        else:
+            self.logFileRequest = None
+            self.logFile = None
         self.geometry = beamRunInputDirectory.geometry
 
         if collectEvents:

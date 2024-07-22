@@ -52,7 +52,7 @@ class InputDirectory:
                 return "/".join([self.directoryPath, relativePath])
         else:
             if type(relativePath) in [list, tuple]:
-                return os.path.join(self.directoryPath, "output", *relativePath)
+                return os.path.join(self.directoryPath, relativePath[0], "output", *relativePath[1:])
             elif type(relativePath) is str:
                 return os.path.join(self.directoryPath, "output", relativePath)
 

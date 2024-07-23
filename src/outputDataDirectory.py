@@ -64,7 +64,7 @@ from src.outputDataFrame import (
     ProcessedToursFile,
     ModeVHT,
     PassengerMilesByVehicleAndMode, PassengerMilesByVehicleAndModeByYear, RealizedModeCount,
-    PassengerMilesByVehicleAndModeByIteration, RealizedModeCountByIteration,
+    PassengerMilesByVehicleAndModeByIteration, RealizedModeCountByIteration, CongestionInfoByIteration,
 )
 from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
@@ -360,6 +360,9 @@ class PilatesOutputData:
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.congestionInfoByYear = CongestionInfoByYear(
+            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+        )
+        self.congestionInfoByIteration = CongestionInfoByIteration(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.passengerMilesByVehicleAndModeByYear = PassengerMilesByVehicleAndModeByYear(

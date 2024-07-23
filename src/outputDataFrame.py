@@ -2224,6 +2224,33 @@ class CongestionInfoByYear(__InfoByYear):
         self.__yearToDataFrame = dict()
 
 
+class CongestionInfoByIteration(__InfoByIteration):
+    def __init__(
+            self,
+            outputDataDirectory: "OutputDataDirectory",
+            pilatesRunInputDirectory: PilatesRunInputDirectory,
+            pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
+    ):
+        def accessor(outputData: "BeamRunOutputData") -> pd.DataFrame:
+            tazIndex = outputData.geometry.index
+            df = outputData.tazTrafficVolumes.dataFrame
+            df["mph"] = df["VMT"] / df["VHT"]
+            df["congestedHours"] = df["mph"] < 2.0
+            df = df.groupby([tazIndex, "attributeOrigType"]).agg(
+                {"VMT": "sum", "VHT": "sum", "congestedHours": "sum"}
+            )
+            df["mph"] = df["VMT"] / df["VHT"]
+            df = df.unstack(tazIndex)
+            df.columns.set_names("metric", level=0, inplace=True)
+            return df
+
+        columns = ["roadType"]
+        super().__init__(outputDataDirectory, pilatesRunInputDirectory, pilatesInputDict, accessor, columns)
+        self.pilatesInputDict = pilatesInputDict
+        self.__lastIterationPerYear = dict()
+        self.__yearToDataFrame = dict()
+
+
 class PassengerMilesByVehicleAndModeByYear(__InfoByYear):
     def __init__(
             self,
@@ -2239,6 +2266,7 @@ class PassengerMilesByVehicleAndModeByYear(__InfoByYear):
         self.pilatesInputDict = pilatesInputDict
         self.__lastIterationPerYear = dict()
         self.__yearToDataFrame = dict()
+
 
 class PassengerMilesByVehicleAndModeByIteration(__InfoByIteration):
     def __init__(

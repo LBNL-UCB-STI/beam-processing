@@ -3,11 +3,8 @@ from multiprocessing import cpu_count
 from typing import Tuple, Dict, Iterable, Optional
 from urllib.error import HTTPError
 import pandas as pd
-import scipy as sp
 
-import urllib3
 from joblib import Parallel, delayed
-from numba import Boolean
 
 from src.input import (
     BeamRunInputDirectory,

@@ -473,7 +473,10 @@ class ModeChoiceEvents(OutputDataFrame):
     def load(self):
         if "ModeChoice" in self.beamInputDirectory.eventsFile.eventTypes:
             df = self.beamInputDirectory.eventsFile.eventTypes["ModeChoice"]
+        elif self.cached:
+            return self._dataFrame
         else:
+            print("Mode choices aren't cached, re-loading file")
             df = self.beamInputDirectory.eventsFile.file()
             df = df.loc[df["type"] == "ModeChoice", :].dropna(axis=1, how="all")
         df.index.name = "event_id"

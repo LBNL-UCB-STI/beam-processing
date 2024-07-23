@@ -147,9 +147,9 @@ class BeamOutputData(ModelOutputData):
         )
 
         if collectEvents:
-            self.pathTraversalEvents.load()
-            self.personEntersVehicleEvents.load()
-            self.modeChoiceEvents.load()
+            _ = self.pathTraversalEvents.dataFrame
+            _ = self.personEntersVehicleEvents.dataFrame
+            _ = self.modeChoiceEvents.dataFrame
             self.inputDirectory.eventsFile.clearEvents()
 
         self.personTrips = PersonTrips(

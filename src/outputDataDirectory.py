@@ -7,6 +7,7 @@ import scipy as sp
 
 import urllib3
 from joblib import Parallel, delayed
+from numba import Boolean
 
 from src.input import (
     BeamRunInputDirectory,
@@ -280,6 +281,7 @@ class PilatesOutputData:
         outputDataDirectory: OutputDataDirectory,
         pilatesRunInputDirectory: PilatesRunInputDirectory,
         region="SFBay",
+        collectEvents: bool = False
     ):
         self.outputDataDirectory = outputDataDirectory
         self.pilatesRunInputDirectory = pilatesRunInputDirectory
@@ -311,7 +313,7 @@ class PilatesOutputData:
 
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
-                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory)
+                self.beamRuns[(yr, it)] = BeamOutputData(outputDataDirectory, directory, collectEvents)
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
 

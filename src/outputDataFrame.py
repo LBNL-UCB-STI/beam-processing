@@ -471,7 +471,6 @@ class ModeChoiceEvents(OutputDataFrame):
         self.indexedOn = "event_id"
 
     def load(self):
-        self.beamInputDirectory.collectAllEvents()
         if "ModeChoice" in self.beamInputDirectory.eventsFile.eventTypes:
             df = self.beamInputDirectory.eventsFile.eventTypes["ModeChoice"]
         else:

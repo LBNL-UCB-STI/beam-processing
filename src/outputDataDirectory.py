@@ -143,15 +143,18 @@ class BeamOutputData(ModelOutputData):
 
         if collectEvents:
             if not all([self.pathTraversalEvents.cached, self.personEntersVehicleEvents, self.modeChoiceEvents.cached]):
-                self.inputDirectory.eventsFile.collectEvents(
-                    ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
-                )
-                _ = self.pathTraversalEvents.dataFrame
-                _ = self.personEntersVehicleEvents.dataFrame
-                _ = self.modeChoiceEvents.dataFrame
-                self.pathTraversalEvents.clearMemory()
-                self.personEntersVehicleEvents.clearMemory()
-                self.modeChoiceEvents.clearMemory()
+                try:
+                    self.inputDirectory.eventsFile.collectEvents(
+                        ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
+                    )
+                    _ = self.pathTraversalEvents.dataFrame
+                    _ = self.personEntersVehicleEvents.dataFrame
+                    _ = self.modeChoiceEvents.dataFrame
+                    self.pathTraversalEvents.clearMemory()
+                    self.personEntersVehicleEvents.clearMemory()
+                    self.modeChoiceEvents.clearMemory()
+                except FileNotFoundError:
+                    print("Missing events file, skipping!")
             self.inputDirectory.eventsFile.clearEvents()
 
         self.personTrips = PersonTrips(

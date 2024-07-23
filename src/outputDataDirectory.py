@@ -83,7 +83,7 @@ class OutputDataDirectory:
 
 class ModelOutputData:
     def __init__(
-        self, outputDataDirectory: OutputDataDirectory, inputDirectory: InputDirectory
+            self, outputDataDirectory: OutputDataDirectory, inputDirectory: InputDirectory
     ):
         self.outputDataDirectory = outputDataDirectory
         self.inputDirectory = inputDirectory
@@ -105,10 +105,10 @@ class BeamOutputData(ModelOutputData):
     """
 
     def __init__(
-        self,
-        outputDataDirectory: OutputDataDirectory,
-        beamRunInputDirectory: BeamRunInputDirectory,
-        collectEvents=False,
+            self,
+            outputDataDirectory: OutputDataDirectory,
+            beamRunInputDirectory: BeamRunInputDirectory,
+            collectEvents=False,
     ):
         """
         Initializes a BeamOutputData instance.
@@ -149,6 +149,9 @@ class BeamOutputData(ModelOutputData):
                 _ = self.pathTraversalEvents.dataFrame
                 _ = self.personEntersVehicleEvents.dataFrame
                 _ = self.modeChoiceEvents.dataFrame
+                self.pathTraversalEvents.clearMemory()
+                self.personEntersVehicleEvents.clearMemory()
+                self.modeChoiceEvents.clearMemory()
             self.inputDirectory.eventsFile.clearEvents()
 
         self.personTrips = PersonTrips(
@@ -201,14 +204,13 @@ class BeamOutputData(ModelOutputData):
         )
 
 
-
 class ActivitySimOutputData(ModelOutputData):
     def __init__(
-        self,
-        outputDataDirectory: OutputDataDirectory,
-        activitySimRunInputDirectory: ActivitySimRunInputDirectory,
-        skims: ProcessedSkimsFile,
-        geometry: Optional[Geometry] = Geometry(),
+            self,
+            outputDataDirectory: OutputDataDirectory,
+            activitySimRunInputDirectory: ActivitySimRunInputDirectory,
+            skims: ProcessedSkimsFile,
+            geometry: Optional[Geometry] = Geometry(),
     ):
         super().__init__(outputDataDirectory, activitySimRunInputDirectory)
         assert isinstance(self.inputDirectory, ActivitySimRunInputDirectory)
@@ -265,11 +267,11 @@ class ActivitySimOutputData(ModelOutputData):
 
 class PilatesOutputData:
     def __init__(
-        self,
-        outputDataDirectory: OutputDataDirectory,
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
-        region="SFBay",
-        collectEvents: bool = False
+            self,
+            outputDataDirectory: OutputDataDirectory,
+            pilatesRunInputDirectory: PilatesRunInputDirectory,
+            region="SFBay",
+            collectEvents: bool = False
     ):
         self.outputDataDirectory = outputDataDirectory
         self.pilatesRunInputDirectory = pilatesRunInputDirectory
@@ -437,12 +439,12 @@ class PilatesOutputData:
 
 class PilatesSettings:
     def __init__(
-        self,
-        scenarioName: str,
-        path: str,
-        years: Iterable[int],
-        asimLiteIterations: int,
-        beamIterations: int,
+            self,
+            scenarioName: str,
+            path: str,
+            years: Iterable[int],
+            asimLiteIterations: int,
+            beamIterations: int,
     ):
         self.scenarioName = scenarioName
         self.path = path
@@ -542,7 +544,7 @@ class PilatesAnalysis:
         return pd.concat(
             self._popsByCountyAndRegionType,
             names=["scenario"]
-            + self._popsByCountyAndRegionType[scenarioName].index.names,
+                  + self._popsByCountyAndRegionType[scenarioName].index.names,
         )
 
     @property
@@ -569,7 +571,7 @@ class PilatesAnalysis:
         return pd.concat(
             self._modechoices,
             names=["scenario"]
-            + list(self._runs.values())[0].tripModeCountPerYear.dataFrame.index.names,
+                  + list(self._runs.values())[0].tripModeCountPerYear.dataFrame.index.names,
         )
 
     @property
@@ -580,7 +582,7 @@ class PilatesAnalysis:
         return pd.concat(
             self._modechoices,
             names=["scenario"]
-            + list(self._runs.values())[0].tourModeCountPerYear.dataFrame.index.names,
+                  + list(self._runs.values())[0].tourModeCountPerYear.dataFrame.index.names,
         )
 
     @property
@@ -593,9 +595,9 @@ class PilatesAnalysis:
         return pd.concat(
             self._pmtByPurpose,
             names=["scenario"]
-            + list(self._runs.values())[
-                0
-            ].tripPMTByPrimaryPurposePerYear.dataFrame.index.names,
+                  + list(self._runs.values())[
+                      0
+                  ].tripPMTByPrimaryPurposePerYear.dataFrame.index.names,
         )
 
     @property
@@ -608,9 +610,9 @@ class PilatesAnalysis:
         return pd.concat(
             self._modeChoicesByCounty,
             names=["scenario"]
-            + list(self._runs.values())[
-                0
-            ].tripModeCountByCountyPerYear.dataFrame.index.names,
+                  + list(self._runs.values())[
+                      0
+                  ].tripModeCountByCountyPerYear.dataFrame.index.names,
         )
 
     @property
@@ -624,7 +626,7 @@ class PilatesAnalysis:
         return pd.concat(
             {key: val for key, val in self._modeVMT.items() if len(val) > 0},
             names=["scenario"]
-            + list(self._runs.values())[0].modeVMTPerYear.dataFrame.index.names,
+                  + list(self._runs.values())[0].modeVMTPerYear.dataFrame.index.names,
         )
 
     @property
@@ -638,7 +640,7 @@ class PilatesAnalysis:
         return pd.concat(
             {key: val for key, val in self._modeEnergy.items() if len(val) > 0},
             names=["scenario"]
-            + list(self._runs.values())[0].modeEnergyPerYear.dataFrame.index.names,
+                  + list(self._runs.values())[0].modeEnergyPerYear.dataFrame.index.names,
         )
 
     @property
@@ -652,5 +654,5 @@ class PilatesAnalysis:
         return pd.concat(
             {key: val for key, val in self._modePMT.items() if len(val) > 0},
             names=["scenario"]
-            + list(self._runs.values())[0].modePMTPerYear.dataFrame.index.names,
+                  + list(self._runs.values())[0].modePMTPerYear.dataFrame.index.names,
         )

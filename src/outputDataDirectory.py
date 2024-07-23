@@ -131,11 +131,6 @@ class BeamOutputData(ModelOutputData):
             self.logFile = None
         self.geometry = beamRunInputDirectory.geometry
 
-        if collectEvents:
-            self.inputDirectory.eventsFile.collectEvents(
-                ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
-            )
-
         self.pathTraversalEvents = PathTraversalEvents(
             self.outputDataDirectory, self.inputDirectory
         )
@@ -147,9 +142,13 @@ class BeamOutputData(ModelOutputData):
         )
 
         if collectEvents:
-            _ = self.pathTraversalEvents.dataFrame
-            _ = self.personEntersVehicleEvents.dataFrame
-            _ = self.modeChoiceEvents.dataFrame
+            if not all([self.pathTraversalEvents.cached, self.personEntersVehicleEvents, self.modeChoiceEvents.cached]):
+                self.inputDirectory.eventsFile.collectEvents(
+                    ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
+                )
+                _ = self.pathTraversalEvents.dataFrame
+                _ = self.personEntersVehicleEvents.dataFrame
+                _ = self.modeChoiceEvents.dataFrame
             self.inputDirectory.eventsFile.clearEvents()
 
         self.personTrips = PersonTrips(
@@ -201,14 +200,6 @@ class BeamOutputData(ModelOutputData):
             list(range(self.inputDirectory.numberOfIterations)),
         )
 
-    def collectAllEvents(self):
-        self.inputDirectory.eventsFile.collectEvents(
-            ["PathTraversal", "PersonEntersVehicle", "ModeChoice"]
-        )
-        self.pathTraversalEvents.dataFrame
-        self.personEntersVehicleEvents.dataFrame
-        self.modeChoiceEvents.dataFrame
-        self.inputDirectory.eventsFile.clearEvents()
 
 
 class ActivitySimOutputData(ModelOutputData):

@@ -618,7 +618,7 @@ class PilatesRunInputDirectory(InputDirectory):
         super().__init__(baseFolderName)
         self.asimRuns = dict()
         self.beamRuns = dict()
-        self.skims = SkimsFile(self)
+        # self.skims = SkimsFile(self)
         if region == "SFBay":
             self.geometry = SfBayGeometry(
                 otherFiles={

@@ -31,7 +31,7 @@ class GlobalRunState:
 class Data:
     """Base class for data objects."""
 
-    def __init__(self, data_type: str, config_or_state: Union['Configuration', GlobalRunState], producer: Optional['ModelRun'] = None):
+    def __init__(self, data_type: Optional[str], config_or_state: Union['Configuration', GlobalRunState], producer: Optional['ModelRun'] = None):
         if isinstance(config_or_state, GlobalRunState):
             self.config = None
             self.name = config_or_state.toRunName(data_type)
@@ -442,7 +442,7 @@ class GlobalConfiguration:
 
             run_id, model_name, config_json, inputs_json = row
             config = Configuration(json.loads(config_json), GlobalRunState.fromRunName(model_name))
-            inputs = {k: Data(name=v, producer=None, config=None) for k, v in json.loads(inputs_json).items()}
+            inputs = {k: Data(data_type=None, producer=None, config_or_state=GlobalRunState.fromRunName(v)) for k, v in json.loads(inputs_json).items()}
 
             return ModelRun(name=model_name, inputs=inputs, config=config, global_config=self)
 
@@ -480,10 +480,11 @@ class GlobalConfiguration:
                     # Retrieve the model run from the database
                     producer = self.get_model_run_from_database(demographic_model.name)
                     current_population = Data(
-                        name=f"Population_{current_state.year}",
+                        data_type="Population",
                         producer=producer,  # Link the producer
-                        config=demo_config,
+                        config_or_state=demo_config,
                     )
+                    producer.outputs.append(current_population)
 
             if "NetworkSimulation" in workflow_modules:
                 for iteration in range(iterations_per_year):
@@ -509,9 +510,11 @@ class GlobalConfiguration:
                         print(f"ActivityDemand_{current_state.year}_{iteration} already completed.")
                         producer = self.get_model_run_from_database(activity_model.name)
                         current_activity_plans = Data(
+                            data_type="ActivityPlans",
                             producer=producer,  # Link the producer
                             config_or_state=activity_config,
                         )
+                        producer.outputs.append(current_activity_plans)
 
                     transport_config = self.generate_config(current_state)
                     transport_model = NetworkSimulation(
@@ -532,9 +535,11 @@ class GlobalConfiguration:
                         print(f"NetworkSimulation_{current_state.year}_{iteration} already completed.")
                         producer = self.get_model_run_from_database(transport_model.name)
                         current_skims = Data(
+                            data_type="Skims",
                             producer=producer,  # Link the producer
                             config_or_state=transport_config,
                         )
+                        producer.outputs.append(current_skims)
 
             if "DemographicEvolution" in workflow_modules:
                 current_state.year += 1
@@ -773,11 +778,11 @@ class Plotter:
             x_position = year + (
                     (iteration or 0) * iteration_step)  # Increment x by 0.1 for each iteration within a year
 
-            if isinstance(model, DemographicEvolution):
+            if "DemographicEvolution" in model.name:
                 layout[model_key] = (x_position * x_step - 0.1, 1.5 * y_spacing)
-            elif isinstance(model, ActivityDemand):
+            elif "ActivityDemand" in model.name:
                 layout[model_key] = (x_position * x_step - 0.1, 0.5 * y_spacing)
-            elif isinstance(model, NetworkSimulation):
+            elif "NetworkSimulation" in model.name:
                 layout[model_key] = (x_position * x_step - 0.1, -0.5 * y_spacing)
             else:
                 layout[model_key] = (x_position * x_step + 0.1, -1.5 * y_spacing)

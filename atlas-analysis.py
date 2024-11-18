@@ -4,12 +4,25 @@ import geopandas as gpd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
+from src.input import PilatesRunInputDirectory
+from src.outputDataDirectory import PilatesOutputData, OutputDataDirectory
+
+controlScenario = "oldBase"
+template2 = "https://storage.googleapis.com/beam-core-outputs/sfbay-baseline2018-30pct-20230825"
+defaultDirectory = PilatesRunInputDirectory(
+                template2, [2018], 10, 1
+            )
+output = PilatesOutputData(
+                OutputDataDirectory("output/{0}".format(controlScenario)), defaultDirectory
+            )
+df = output.tripModeCountPerYear.dataFrame
+
 
 scenarioNames = ["base-20240711", "ESS-20240715"]
 years = [2017, 2023, 2029]
 asimLiteIterations = 2
 beamIterations = 1
-template = "https://storage.googleapis.com/beam-core-outputs/sfbay-atlas-{}"
+template = "/global/scratch/users/zaneedell/pilates-outputs/sfbay-atlas-{}"
 folderNames = [template.format(n) for n in scenarioNames]
 
 settings = [
@@ -25,6 +38,10 @@ mcCounty = scenario.tripModeCountByCounty
 
 vmtByMode = scenario.vmtByMode
 energyByMode = scenario.energyByMode
+
+
+
+
 
 print('done')
 # OLD STUFF

@@ -451,12 +451,14 @@ class PilatesSettings:
             years: Iterable[int],
             asimLiteIterations: int,
             beamIterations: int,
+            region: Optional[str] = "SFbay"
     ):
         self.scenarioName = scenarioName
         self.path = path
         self.years = years
         self.asimLiteIteratsions = asimLiteIterations
         self.beamIterations = beamIterations
+        self.region = region
 
 
 class PilatesAnalysis:
@@ -465,7 +467,7 @@ class PilatesAnalysis:
         self._runs = dict()
         for ps in self.allPilatesSettings:
             directory = PilatesRunInputDirectory(
-                ps.path, ps.years, ps.asimLiteIteratsions, ps.beamIterations
+                ps.path, ps.years, ps.asimLiteIteratsions, ps.beamIterations, region=ps.region
             )
             self._runs[ps.scenarioName] = PilatesOutputData(
                 OutputDataDirectory("output/{0}".format(ps.scenarioName)), directory

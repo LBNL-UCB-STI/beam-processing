@@ -283,7 +283,7 @@ class PathTraversalEvents(OutputDataFrame):
                     self.beamInputDirectory.eventsFile.filePath,
                 )
             )
-            self.beamInputDirectory.collectAllEvents()
+            self.beamInputDirectory.eventsFile.collectEvents(["PathTraversal", "PersonEntersVehicle", "ModeChoice"])
         df = self.beamInputDirectory.eventsFile.eventTypes["PathTraversal"]
         # else:
         #     df = self.beamInputDirectory.eventsFile.file()

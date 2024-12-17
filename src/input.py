@@ -845,7 +845,7 @@ class PilatesRunInputDirectory(InputDirectory):
         years: Iterable[int],
         asimLiteIterations: int,
         beamIterations=0,
-        region="SFBay",
+        region="SFBay"
     ):
         super().__init__(baseFolderName)
         self.asimRuns = dict()

@@ -241,7 +241,7 @@ class NetworkSimulation(ModelRun):
     def build_dependency(self, input_name: str, input_type: type) -> Optional[Data]:
         if input_name == "population" and input_type == Population:
             year = self.config.parameters["year"]
-            population_config = self.global_config.generate_config("DemographicEvolution", year)
+            population_config = self.global_config.generate_config(self.config.state)
             population_run = DemographicEvolution(
                 name=f"DemoEvo_{year}",
                 inputs={"population": None},  # Dependency will be resolved
@@ -255,7 +255,7 @@ class NetworkSimulation(ModelRun):
             iteration = self.config.parameters["iteration"] - 1
             if iteration < 0:
                 return None  # No previous Skims for the first iteration
-            skims_config = self.global_config.generate_config("NetworkSimulation", self.config.parameters["year"])
+            skims_config = self.global_config.generate_config(self.config.state)
             skims_run = NetworkSimulation(
                 name=f"TransportSim_{iteration}",
                 inputs={"population": None, "activity_plans": None, "previous_skims": None},  # Dependencies resolved
@@ -270,7 +270,7 @@ class NetworkSimulation(ModelRun):
             year = self.config.parameters["year"]
             if iteration < 0:
                 return None  # No previous Skims for the first iteration
-            plans_config = self.global_config.generate_config("ActivityDemand", self.config.parameters["year"])
+            plans_config = self.global_config.generate_config(self.config.state)
             plans_run = ActivityDemand(
                 name=f"ActivityDemand_{year}_{iteration}",
                 inputs={"population": None, "activity_plans": None, "previous_skims": None},  # Dependencies resolved
@@ -850,7 +850,7 @@ if __name__ == "__main__":
     # Create a GlobalConfiguration instance (assuming it's already set up)
     iteration_settings = {
         "workflow": ["DemographicEvolution", "NetworkSimulation"],
-        "iterations_per_year": 2,
+        "iterations_per_year": 1,
         "fixed_inputs": {
             "population": Data("Population", config_or_state=Configuration({"year": 2020}, state=GlobalRunState(
                 "DemographicEvolution",
@@ -865,7 +865,7 @@ if __name__ == "__main__":
     global_config = GlobalConfiguration(
         database_path="../scratch/test_workflow.db",
         start_year=2020,
-        end_year=2022,
+        end_year=2021,
         iteration_settings=iteration_settings,
         custom_config_generator=custom_config_generator
     )

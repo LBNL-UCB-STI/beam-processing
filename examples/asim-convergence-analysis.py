@@ -2,12 +2,10 @@ from src import input, outputDataDirectory
 import pandas as pd
 import geopandas as gpd
 import os
-
 # import matplotlib
 #
 # matplotlib.use("TkAgg")
 
-#
 
 os.chdir("../")
 # "https://storage.googleapis.com/beam-core-outputs/seattle-util-diff-20240715/activitysim/final_trips.csv"

@@ -13,7 +13,6 @@ def getLinkStats(PTs: pd.DataFrame):
     Returns:
         pd.DataFrame: a dataframe of link volumes and travel times from the path traversal events
     """
-    PTs = PTs.head(10000)
     linksAndTravelTimes = pd.concat(
         [
             PTs.links.str.split(","),
@@ -27,7 +26,7 @@ def getLinkStats(PTs: pd.DataFrame):
     ].astype(float)
     linksAndTravelTimes["links"] = linksAndTravelTimes["links"].astype(pd.Int64Dtype())
     linksAndTravelTimes = linksAndTravelTimes.loc[
-        linksAndTravelTimes.index.duplicated(keep="first")
+        ~linksAndTravelTimes.index.duplicated(keep="first")
     ]
     linksAndTravelTimes["cumulativeTravelTime"] = linksAndTravelTimes.groupby(
         level=0
@@ -421,7 +420,6 @@ def doInexus(dfs: dict):
     def processPTs(events):
         events = events.rename(columns={"mode": "modeBEAM", "netCost": "cost_BEAM"})
         events = addEmissions(events)
-        # events = updateMode(events)
         events = updateDuration(events)
 
         isPublicVehicleTraversal = events.driver.str.contains("Agent")
@@ -430,6 +428,7 @@ def doInexus(dfs: dict):
         privateVehicleEvents["IDMerged"] = pd.to_numeric(privateVehicleEvents.IDMerged)
 
         publicVehicleEvents = events.loc[isPublicVehicleTraversal, :]
+        # Only process public vehicle events with riders
         publicVehicleEvents = publicVehicleEvents.loc[
             ~publicVehicleEvents.riders.isna(), :
         ].copy()
@@ -438,6 +437,7 @@ def doInexus(dfs: dict):
         publicVehicleEvents["IDMerged"] = publicVehicleEvents["riderList"].copy()
         publicVehicleEvents.drop(columns=["riderList"], inplace=True)
         publicVehicleEvents["IDMerged"] = pd.to_numeric(publicVehicleEvents.IDMerged)
+        # Add specific transit mode flags
         publicVehicleEvents["transit_bus"] = np.where(
             publicVehicleEvents["modeBEAM"] == "bus", 1, 0
         )
@@ -454,25 +454,19 @@ def doInexus(dfs: dict):
             publicVehicleEvents["modeBEAM"] == "cable_car", 1, 0
         )
 
-        pathTraversals = (
-            pd.concat([publicVehicleEvents, privateVehicleEvents], axis=0)
-            .sort_values(["time"])
-            .reset_index(drop=True)
-            .set_index("IDMerged", append=True)
-            .reorder_levels([1, 0])
-            .sort_index(level=0)
-        )
+        # Combine public and private events, sort by time within each person
+        pathTraversals = pd.concat(
+            [publicVehicleEvents, privateVehicleEvents], axis=0
+        ).sort_values(
+            ["IDMerged", "time"]
+        )  # Ensure sorting by person then time
 
-        pathTraversals["eventOrder"] = (
-            pathTraversals.index.to_frame(index=False)
-            .groupby("IDMerged")
-            .agg("rank")
-            .astype(int)
-            .values
-        )
-        pathTraversals = pathTraversals.set_index("eventOrder", append=True).droplevel(
-            1
-        )
+        pathTraversals["eventOrder"] = pathTraversals.groupby("IDMerged").cumcount() + 1
+
+        # Set desired final index (IDMerged, eventOrder)
+        pathTraversals = pathTraversals.set_index(["IDMerged", "eventOrder"])
+
+        # Drop columns that are no longer needed or processed
         pathTraversals.drop(
             columns=[
                 "driver",
@@ -480,17 +474,18 @@ def doInexus(dfs: dict):
                 "toStopIndex",
                 "fromStopIndex",
                 "seatingCapacity",
-                "linkTravelTime",
-                "secondaryFuel",
+                "linkTravelTime",  # linkTravelTime was exploded and processed, raw column can be dropped
+                "secondaryFuel",  # fuels are aggregated in addEmissions
                 "secondaryFuelType",
                 "primaryFuelType",
-                "links",
-                "primaryFuel",
+                "links",  # links was exploded and processed, raw column can be dropped
+                "primaryFuel",  # fuels are aggregated in addEmissions
                 "secondaryFuelLevel",
                 "primaryFuelLevel",
-                "currentTourMode",
+                # "currentTourMode", # Keep if used later, remove if not
             ],
             inplace=True,
+            errors="ignore",  # Ignore if column doesn't exist
         )
         return pathTraversals
 
@@ -506,42 +501,27 @@ def doInexus(dfs: dict):
         events["mode_choice_planned_BEAM"] = events["mode_choice_actual_BEAM"].copy()
 
         events["IDMerged"] = pd.to_numeric(events.IDMerged)
-        events = (
-            events.sort_values(["time"])
-            .set_index("IDMerged", append=True)
-            .reorder_levels([1, 0])
-            .sort_index(level=0)
-        )
+        # Sort by IDMerged then time
+        events = events.sort_values(["IDMerged", "time"])
 
-        events["eventOrder"] = (
-            events.index.to_frame(index=False)
-            .groupby("IDMerged")
-            .agg("rank")
-            .astype(int)
-            .values
-        )
-        return events.set_index("eventOrder", append=True).droplevel(1)
+        # Fix eventOrder calculation - use cumcount for sequence number per person
+        events["eventOrder"] = events.groupby("IDMerged").cumcount() + 1
+
+        # Set desired final index (IDMerged, eventOrder)
+        return events.set_index(["IDMerged", "eventOrder"])
 
     def processReplanning(events):
-        # TODO: Check that this gets indexed correctly
         events = events.copy().rename(columns={"person": "IDMerged"})
         events["IDMerged"] = pd.to_numeric(events.IDMerged)
-        events = (
-            events.sort_values(["time"])
-            .set_index("IDMerged", append=True)
-            .reorder_levels([1, 0])
-            .sort_index(level=0)
-        )
+        # Sort by IDMerged then time
+        events = events.sort_values(["IDMerged", "time"])
         events["replanning_status"] = 1
 
-        events["eventOrder"] = (
-            events.index.to_frame(index=False)
-            .groupby("IDMerged")
-            .agg("rank")
-            .astype(int)
-            .values
-        )
-        return events.set_index("eventOrder", append=True).droplevel(1)
+        # Fix eventOrder calculation - use cumcount for sequence number per person
+        events["eventOrder"] = events.groupby("IDMerged").cumcount() + 1
+
+        # Set desired final index (IDMerged, eventOrder)
+        return events.set_index(["IDMerged", "eventOrder"])
 
     def processParking(events):
         events = events.rename(columns={"cost": "cost_BEAM", "driver": "IDMerged"})
@@ -549,42 +529,36 @@ def doInexus(dfs: dict):
             ~events["IDMerged"].isna(),  # Might be duplicated
             ["IDMerged", "parkingTaz", "parkingType", "time", "type", "cost_BEAM"],
         ]
-        events = events.loc[events["IDMerged"].str.isnumeric(), :].copy()
-        events = (
-            events.sort_values(["time"])
-            .set_index("IDMerged", append=True)
-            .reorder_levels([1, 0])
-            .sort_index(level=0)
-        )
+        # Ensure IDMerged is numeric after filtering
+        events = events.loc[
+            pd.to_numeric(events["IDMerged"], errors="coerce").notna(), :
+        ].copy()
+        events["IDMerged"] = pd.to_numeric(events.IDMerged)
 
-        events["eventOrder"] = (
-            events.index.to_frame(index=False)
-            .groupby("IDMerged")
-            .agg("rank")
-            .astype(int)
-            .values
-        )
-        return events.set_index("eventOrder", append=True).droplevel(1)
+        # Sort by IDMerged then time
+        events = events.sort_values(["IDMerged", "time"])
+
+        # Fix eventOrder calculation - use cumcount for sequence number per person
+        events["eventOrder"] = events.groupby("IDMerged").cumcount() + 1
+
+        # Set desired final index (IDMerged, eventOrder)
+        return events.set_index(["IDMerged", "eventOrder"])
 
     def processPersonCost(events):
         events = events.rename(columns={"person": "IDMerged", "mode": "mode_BEAM"})
         events["cost_BEAM"] = events["tollCost"] + events["netCost"]
         events = events[["IDMerged", "mode_BEAM", "time", "type", "cost_BEAM"]].copy()
-        events = (
-            events.sort_values(["time"])
-            .set_index("IDMerged", append=True)
-            .reorder_levels([1, 0])
-            .sort_index(level=0)
-        )
+        # Ensure IDMerged is numeric
+        events["IDMerged"] = pd.to_numeric(events.IDMerged)
 
-        events["eventOrder"] = (
-            events.index.to_frame(index=False)
-            .groupby("IDMerged")
-            .agg("rank")
-            .astype(int)
-            .values
-        )
-        return events.set_index("eventOrder", append=True).droplevel(1)
+        # Sort by IDMerged then time
+        events = events.sort_values(["IDMerged", "time"])
+
+        # Fix eventOrder calculation - use cumcount for sequence number per person
+        events["eventOrder"] = events.groupby("IDMerged").cumcount() + 1
+
+        # Set desired final index (IDMerged, eventOrder)
+        return events.set_index(["IDMerged", "eventOrder"])
 
     def processModeChoice(events):
         events = events.rename(
@@ -592,9 +566,16 @@ def doInexus(dfs: dict):
                 "mode": "modeBEAM",
                 "person": "IDMerged",
                 "netCost": "cost_BEAM",
-                "length": "distance_mode_choice",
+                "length": "distance_mode_choice",  # Note: length is path length, not crow-flies distance
             }
         )
+        # Ensure IDMerged is numeric
+        events["IDMerged"] = pd.to_numeric(events.IDMerged)
+
+        # Sort by IDMerged then time before calculating actual/planned
+        events = events.sort_values(["IDMerged", "time"])
+
+        # Keep only the first (planned) and last (actual) mode choice per tripId
         events["mode_choice_actual_BEAM"] = events.groupby(["IDMerged", "tripId"])[
             "modeBEAM"
         ].transform("last")
@@ -605,7 +586,8 @@ def doInexus(dfs: dict):
             "time"
         ].transform("first")
 
-        events.drop_duplicates(subset=["tripId"], keep="last", inplace=True)
+        # Drop duplicate trip IDs, keeping the last event for each trip
+        events.drop_duplicates(subset=["IDMerged", "tripId"], keep="last", inplace=True)
 
         events = events.drop(
             columns=[
@@ -614,24 +596,22 @@ def doInexus(dfs: dict):
                 "legModes",
                 "legVehicleIds",
                 "personalVehicleAvailable",
-                "currentTourMode",
-            ]
-        )
-        events = (
-            events.sort_values(["time"])
-            .set_index("IDMerged", append=True)
-            .reorder_levels([1, 0])
-            .sort_index(level=0)
+                "currentTourMode",  # Keep or remove as needed based on usage elsewhere
+            ],
+            errors="ignore",  # Ignore if column doesn't exist
         )
 
-        events["eventOrder"] = (
-            events.index.to_frame(index=False)
-            .groupby("IDMerged")
-            .agg("rank")
-            .astype(int)
-            .values
-        )
-        return events.set_index("eventOrder", append=True).droplevel(1)
+        # Sort by IDMerged then time for final indexing
+        events = events.sort_values(["IDMerged", "time"])
+
+        # Fix eventOrder calculation - use cumcount for sequence number per person
+        events["eventOrder"] = events.groupby("IDMerged").cumcount() + 1
+
+        # Set desired final index (IDMerged, eventOrder)
+        # Note: With drop_duplicates above, this index might not be unique if multiple trips per person
+        # but it seems the goal is to index events *by* person, so this might be okay.
+        # If index should be unique per trip, tripId should be in index. Revisit if needed.
+        return events.set_index(["IDMerged", "eventOrder"])
 
     PTs = processPTs(dfs["PathTraversal"])
     TEs = processTeleportation(dfs["TeleportationEvent"])
@@ -651,30 +631,78 @@ def doInexus(dfs: dict):
 
 
 def assignTripIdToEvents(pathTraversals, modeChoices, otherColumns=None):
+    # Assigns tripId and other columns from ModeChoice events to other event types (like PathTraversal)
+    # by matching events occurring between the start and end times of a trip's mode choice sequence.
+    # Assumes modeChoices and pathTraversals are indexed by (IDMerged, eventOrder) and sorted by time implicitly through eventOrder.
+
     if otherColumns is None:
         otherColumns = dict()
-    modeChoices.index = modeChoices.index.set_levels(
-        modeChoices.index.levels[0].astype(int), level=0
-    )
-    MCtimes = modeChoices["original_time"].copy()
-    MCids = modeChoices["tripId"].copy().astype(pd.Int64Dtype())
-    # toAdd = dict()
-    # for col in otherColumns:
-    #     toAdd[col] = modeChoices[col].copy()
 
+    # Extract relevant columns from ModeChoices for quick lookup
+    # We need IDMerged, original_time (trip start time), and tripId
+    # Plus any columns specified in otherColumns
+    mc_lookup_cols = ["original_time", "tripId"] + list(otherColumns.keys())
+    # Get mode choices data as a DataFrame with IDMerged as a regular column for groupby
+    mc_df = modeChoices[mc_lookup_cols].reset_index(
+        "eventOrder"
+    )  # Drop eventOrder from index temporarily
+
+    # Helper function to apply to each person's events
     def aggregator(grp):
-        vals = dict()
-        pId = int(grp.name)
-        if pId in MCtimes.index:
-            idx = np.searchsorted(
-                MCtimes.loc[pId].values, grp["time"].values, side="right"
-            )
-            vals["tripId"] = MCids.loc[pId].iloc[idx - 1].values
-            for oldName, newName in otherColumns.items():
-                vals[newName] = modeChoices.loc[pId, oldName].iloc[idx - 1].values
-        return pd.DataFrame(vals, index=grp.index.get_level_values(1))
+        # grp is a DataFrame for a single IDMerged, indexed by eventOrder (and implicitly sorted by time)
+        person_id = grp.name  # Get the person ID
 
+        # Get mode choices for this person, sorted by time
+        person_mc = mc_df.loc[person_id].sort_values("original_time")
+
+        vals = {}
+        if not person_mc.empty:
+            # Get the times of mode choices (trip start times) for this person
+            mc_times = person_mc["original_time"].values
+            # Get the corresponding tripIds
+            mc_trip_ids = person_mc["tripId"].values
+            # Get values for other requested columns
+            other_cols_data = {
+                col: person_mc[col].values for col in otherColumns.keys()
+            }
+
+            # For each event in the current person's events (grp), find which trip's time range it falls into.
+            # np.searchsorted finds the insertion point for each event time ('time' column in grp)
+            # in the sorted list of mode choice times (mc_times).
+            # side='right' means events happening *at* the start time are included in the previous trip.
+            # We subtract 1 from the index because searchsorted gives the index *after* the match.
+            idx = np.searchsorted(mc_times, grp["time"].values, side="right") - 1
+
+            # Ensure indices are within bounds (handle events before the first trip or after the last)
+            idx = np.clip(idx, 0, len(mc_times) - 1)
+
+            # Assign the tripId and other column values corresponding to the found index
+            vals["tripId"] = mc_trip_ids[idx]
+            for oldName, newName in otherColumns.items():
+                vals[newName] = other_cols_data[oldName][idx]
+
+        # Return a DataFrame with the new columns, indexed the same way as the input grp (by eventOrder)
+        if not vals:  # If no mode choices for this person
+            # Return an empty DataFrame with the expected index and columns
+            return pd.DataFrame(
+                columns=["tripId"] + list(otherColumns.values()), index=grp.index
+            )
+
+        # Create DataFrame using grp.index which should be (IDMerged, eventOrder)
+        result_df = pd.DataFrame(vals, index=grp.index)
+
+        # Ensure column names for otherColumns are the 'newName'
+        result_df.rename(columns=otherColumns, inplace=True)
+
+        return result_df
+
+    # Apply the aggregator to each person group
     newColumns = pathTraversals.groupby("IDMerged").apply(aggregator)
+
+    # Concatenate the original pathTraversals with the new columns
+    # The index of pathTraversals is (IDMerged, eventOrder).
+    # The index of newColumns is (IDMerged, eventOrder) because we used grp.index in aggregator.
+    # Direct concatenation should work.
     return pd.concat([pathTraversals, newColumns], axis=1)
 
 

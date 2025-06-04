@@ -838,7 +838,7 @@ class PersonsFile(RawOutputFile):
         if inputDirectory.file_format == "csv":
             relativePath = "persons.csv.gz"
         else:
-            relativePath = "final_pipeline/persons/final.parquet"
+            relativePath = "persons"
         super().__init__(inputDirectory, relativePath, index_col="person_id")
 
     def split(self, person_id_to_division) -> (Dict[str, pd.DataFrame], Dict[int, str]):
@@ -857,7 +857,7 @@ class HouseholdsFile(RawOutputFile):
         if inputDirectory.file_format == "csv":
             relativePath = "households.csv.gz"
         else:
-            relativePath = "final_pipeline/households/final.parquet"
+            relativePath = "households"
         super().__init__(inputDirectory, relativePath, index_col="household_id")
 
     def split(
@@ -873,7 +873,7 @@ class TripsFile(RawOutputFile):
         if inputDirectory.file_format == "csv":
             relativePath = "final_trips.csv.gz"
         else:
-            relativePath = "final_pipeline/trips/final.parquet"
+            relativePath = "trips"
         super().__init__(
             inputDirectory,
             relativePath,
@@ -935,7 +935,7 @@ class ToursFile(RawOutputFile):
         if inputDirectory.file_format == "csv":
             relativePath = "final_tours.csv.gz"
         else:
-            relativePath = "final_pipeline/tours/final.parquet"
+            relativePath = "tours"
         super().__init__(
             inputDirectory,
             relativePath,

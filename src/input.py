@@ -38,9 +38,10 @@ class InputDirectory:
         isLink (bool): Indicates whether the directory path includes a link either to a website or an s3 or gcloud bucket
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, file_format: str):
         self.directoryPath = path
         self.isLink = "://" in path
+        self.file_format = file_format
 
     def append(self, relativePath):
         """
@@ -104,30 +105,43 @@ class RawOutputFile:
         if self._file is None:
             print(f"Attempting to read file from {self.filePath}")
             try:
-                # Try reading directly (works for local and some cloud/http paths)
-                # Add compression handling for gz
-                compression = "gzip" if self.filePath.endswith(".gz") else None
-                self._file = pd.read_csv(
-                    self.filePath,
-                    index_col=self.index_col,
-                    dtype=self.dtype,  # Use provided dtype
-                    compression=compression,
-                )
-                # Check if the file is an empty CSV or an HTML error page masquerading as CSV
-                if self._file.empty and self.filePath.endswith(".csv.gz"):
-                    # Check if it's *just* headers, could indicate empty
-                    # A more robust check might look at file size or content header if available
-                    print(f"Warning: File {self.filePath} appears empty.")
-                elif self._file.columns.empty and self.filePath.endswith(".csv.gz"):
-                    # Handle cases where read_csv might return empty columns for invalid gzip?
-                    # Or if the file is truly empty.
-                    print(f"Warning: File {self.filePath} has no columns.")
-                    self._file = None  # Treat as failed load
-                elif self._file.columns[0].startswith("<!"):
-                    # Catch reading an html file as a table
-                    raise pd.errors.ParserError(
-                        f"File {self.filePath} seems to be an HTML error page."
+                if self.inputDirectory.file_format == "csv":
+                    # Try reading directly (works for local and some cloud/http paths)
+                    # Add compression handling for gz
+                    compression = "gzip" if self.filePath.endswith(".gz") else None
+                    self._file = pd.read_csv(
+                        self.filePath,
+                        index_col=self.index_col,
+                        dtype=self.dtype,  # Use provided dtype
+                        compression=compression,
                     )
+                    # Check if the file is an empty CSV or an HTML error page masquerading as CSV
+                    if self._file.empty and self.filePath.endswith(".csv.gz"):
+                        # Check if it's *just* headers, could indicate empty
+                        # A more robust check might look at file size or content header if available
+                        print(f"Warning: File {self.filePath} appears empty.")
+                    elif self._file.columns.empty and self.filePath.endswith(".csv.gz"):
+                        # Handle cases where read_csv might return empty columns for invalid gzip?
+                        # Or if the file is truly empty.
+                        print(f"Warning: File {self.filePath} has no columns.")
+                        self._file = None  # Treat as failed load
+                    elif self._file.columns[0].startswith("<!"):
+                        # Catch reading an html file as a table
+                        raise pd.errors.ParserError(
+                            f"File {self.filePath} seems to be an HTML error page."
+                        )
+                elif self.inputDirectory.file_format == "parquet":
+                    if self.filePath.endswith(".parquet"):
+                        file = pd.read_parquet(self.filePath)
+                        self._file = file
+                    elif self.filePath.endswith(".csv") | self.filePath.endswith(
+                        ".csv.gz"
+                    ):
+                        self._file = pd.read_csv(
+                            self.filePath,
+                            index_col=self.index_col,
+                            dtype=self.dtype,
+                        )
 
             except (
                 FileNotFoundError,
@@ -373,7 +387,9 @@ class EventsFile(RawOutputFile):
         (inherits attributes from OutputFile)
     """
 
-    def __init__(self, inputDirectory: InputDirectory, iteration: int):
+    def __init__(
+        self, inputDirectory: InputDirectory, iteration: int, file_format="csv"
+    ):
         """
         Initializes an EventsFile instance.
 
@@ -392,13 +408,20 @@ class EventsFile(RawOutputFile):
             "vehicle": "str",
             "parkingTaz": "str",
         }
+        if file_format == "csv":
+            filename = "{0}.events.csv.gz".format(iteration)
+        elif file_format == "parquet":
+            filename = "{0}.events.parquet".format(iteration)
+        else:
+            raise ValueError("Unsupported file format: {0}".format(file_format))
         relativePath = [
             "ITERS",
             "it.{0}".format(iteration),
-            "{0}.events.csv.gz".format(iteration),
+            filename,
         ]
         super().__init__(inputDirectory, relativePath, dtype=dtypes)
         self.eventTypes = dict()
+        self.__file_format = file_format
         self.__chunksize = 5000000
 
     def collectEvents(self, eventTypes: list):
@@ -409,23 +432,33 @@ class EventsFile(RawOutputFile):
             eventTypes (list): A list of event types to collect from the raw events file.
         """
         __listOfFrames = {eventType: [] for eventType in eventTypes}
-        for chunk in pd.read_csv(
-            self.filePath,
-            chunksize=self.__chunksize,
-            dtype={
-                "driver": "str",
-                "riders": "str",
-                "linkTravelTime": "str",
-                "links": "str",
-                "person": "str",
-                "vehicle": "str",
-                "parkingTaz": "str",
-            },
-        ):
+        if self.__file_format == "csv":
+            for chunk in pd.read_csv(
+                self.filePath,
+                chunksize=self.__chunksize,
+                dtype={
+                    "driver": "str",
+                    "riders": "str",
+                    "linkTravelTime": "str",
+                    "links": "str",
+                    "person": "str",
+                    "vehicle": "str",
+                    "parkingTaz": "str",
+                },
+            ):
+                for eventType in eventTypes:
+                    __listOfFrames[eventType].append(
+                        chunk.loc[chunk["type"] == eventType, :].dropna(
+                            axis=1, how="all"
+                        )
+                    )
+        elif self.__file_format == "parquet":
             for eventType in eventTypes:
-                __listOfFrames[eventType].append(
-                    chunk.loc[chunk["type"] == eventType, :].dropna(axis=1, how="all")
-                )
+                __listOfFrames[eventType] = [
+                    pd.read_parquet(
+                        self.filePath, filters=[("type", "==", eventType)]
+                    ).dropna(how="all", axis=1)
+                ]
         for eventType in eventTypes:
             print("Extracting {0} events from raw events file".format(eventType))
             self.eventTypes[eventType] = pd.concat(
@@ -595,6 +628,7 @@ class BeamRunInputDirectory(InputDirectory):
         numberOfIterations: int = 0,
         geometry: Optional[Geometry] = None,
         region: Optional[str] = None,
+        file_format: Optional[str] = "csv",
     ):
         """
         Initializes a BeamRunInputDirectory instance.
@@ -603,8 +637,8 @@ class BeamRunInputDirectory(InputDirectory):
             baseFolderName (str): The base folder name for the Beam run.
             numberOfIterations (int): The number of iterations for the Beam run.
         """
-        super().__init__(baseFolderName)
-        self.eventsFile = EventsFile(self, numberOfIterations)
+        super().__init__(baseFolderName, file_format)
+        self.eventsFile = EventsFile(self, numberOfIterations, file_format)
         self.numberOfIterations = numberOfIterations
         self.inputPlansFile = InputPlansFile(self)
         self.replanningEventReasonFile = ReplanningEventReasonFile(self)
@@ -801,7 +835,10 @@ class TripUtilitiesFiles(RawOutputFile):
 
 class PersonsFile(RawOutputFile):
     def __init__(self, inputDirectory: InputDirectory):
-        relativePath = "persons.csv.gz"
+        if inputDirectory.file_format == "csv":
+            relativePath = "persons.csv.gz"
+        else:
+            relativePath = "final_pipeline/persons/final.parquet"
         super().__init__(inputDirectory, relativePath, index_col="person_id")
 
     def split(self, person_id_to_division) -> (Dict[str, pd.DataFrame], Dict[int, str]):
@@ -817,7 +854,10 @@ class PersonsFile(RawOutputFile):
 
 class HouseholdsFile(RawOutputFile):
     def __init__(self, inputDirectory: InputDirectory):
-        relativePath = "households.csv.gz"
+        if inputDirectory.file_format == "csv":
+            relativePath = "households.csv.gz"
+        else:
+            relativePath = "final_pipeline/households/final.parquet"
         super().__init__(inputDirectory, relativePath, index_col="household_id")
 
     def split(
@@ -830,7 +870,10 @@ class HouseholdsFile(RawOutputFile):
 
 class TripsFile(RawOutputFile):
     def __init__(self, inputDirectory: InputDirectory):
-        relativePath = "final_trips.csv.gz"
+        if inputDirectory.file_format == "csv":
+            relativePath = "final_trips.csv.gz"
+        else:
+            relativePath = "final_pipeline/trips/final.parquet"
         super().__init__(
             inputDirectory,
             relativePath,
@@ -889,7 +932,10 @@ class TripsFile(RawOutputFile):
 
 class ToursFile(RawOutputFile):
     def __init__(self, inputDirectory: InputDirectory):
-        relativePath = "final_tours.csv.gz"
+        if inputDirectory.file_format == "csv":
+            relativePath = "final_tours.csv.gz"
+        else:
+            relativePath = "final_pipeline/tours/final.parquet"
         super().__init__(
             inputDirectory,
             relativePath,
@@ -1173,8 +1219,8 @@ class SkimsFile(RawOutputFile):
 
 
 class ActivitySimRunInputDirectory(InputDirectory):
-    def __init__(self, baseFolderName: str, geometry=Geometry()):
-        super().__init__(baseFolderName)
+    def __init__(self, baseFolderName: str, geometry=Geometry(), file_format="csv"):
+        super().__init__(baseFolderName, file_format)
         self.householdsFile = HouseholdsFile(self)
         self.personsFile = PersonsFile(self)
         self.tripsFile = TripsFile(self)
@@ -1211,11 +1257,13 @@ class PilatesRunInputDirectory(InputDirectory):
         asimLiteIterations: int,
         beamIterations=0,
         region="SFBay",
+        file_format="csv",
         collectEvents=False,
     ):
-        super().__init__(baseFolderName)
+        super().__init__(baseFolderName, file_format)
         self.asimRuns = dict()
         self.beamRuns = dict()
+        self.file_format = file_format
         try:
             self.skims = SkimsFile(self)
         except Exception as e:
@@ -1240,7 +1288,7 @@ class PilatesRunInputDirectory(InputDirectory):
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))
                 self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
-                    self.append(relPath), self.geometry
+                    self.append(relPath), self.geometry, file_format
                 )
                 relPath = ["beam"]
                 if not self.isLink:
@@ -1248,5 +1296,5 @@ class PilatesRunInputDirectory(InputDirectory):
                     relPath.append(region.lower())
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
-                    self.append(relPath), beamIterations, self.geometry
+                    self.append(relPath), beamIterations, self.geometry, file_format
                 )

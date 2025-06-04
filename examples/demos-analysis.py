@@ -72,9 +72,11 @@ totEnergy2 = (
     + pmtByMode.unstack("mode")["passengerMiles"]["car_RideHail"]
     * energyIntensity["car_RideHail"]
     + pmtByMode.unstack("mode")["passengerMiles"]["car_hov2"]
-    * energyIntensity["car_hov2"] / 2.0
+    * energyIntensity["car_hov2"]
+    / 2.0
     + pmtByMode.unstack("mode")["passengerMiles"]["car_hov3"]
-    * energyIntensity["car_hov3"] / 3.0
+    * energyIntensity["car_hov3"]
+    / 3.0
 )
 scenario.runInexus()
 

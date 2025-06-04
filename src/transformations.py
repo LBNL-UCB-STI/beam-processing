@@ -21,13 +21,16 @@ def getLinkStats(PTs: pd.DataFrame):
         ],
         axis=1,
     ).explode(["links", "linkTravelTime"])
-    linksAndTravelTimes["linkTravelTime"] = linksAndTravelTimes[
-        "linkTravelTime"
-    ].astype(float)
-    linksAndTravelTimes["links"] = linksAndTravelTimes["links"].astype(pd.Int64Dtype())
     linksAndTravelTimes = linksAndTravelTimes.loc[
-        ~linksAndTravelTimes.index.duplicated(keep="first")
-    ]
+        linksAndTravelTimes["links"] != "", :
+    ].copy()
+    linksAndTravelTimes["linkTravelTime"] = pd.to_numeric(
+        linksAndTravelTimes["linkTravelTime"]
+    )
+    linksAndTravelTimes["links"] = linksAndTravelTimes["links"].astype(pd.Int64Dtype())
+    # linksAndTravelTimes = linksAndTravelTimes.loc[
+    #     ~linksAndTravelTimes.index.duplicated(keep="first")
+    # ]
     linksAndTravelTimes["cumulativeTravelTime"] = linksAndTravelTimes.groupby(
         level=0
     ).agg({"linkTravelTime": np.cumsum})
@@ -106,20 +109,27 @@ def fixPathTraversals(PTs: pd.DataFrame):
 
 
 def filterPersons(persons: pd.DataFrame):
+    cols_to_keep = [
+        "earning",
+        "is_worker",
+        "is_student",
+        "household_id",
+        "school_zone_id",
+        "home_zone_id",
+        "age",
+        "work_zone_id",
+        "workplace_zone_id",
+        "distance_to_school",
+        "distance_to_work",
+        "TAZ",
+        "home_x",
+        "home_y",
+        "sex",
+        "pemploy",
+    ]
     return persons.loc[
         :,
-        [
-            "earning",
-            "worker",
-            "student",
-            "household_id",
-            "school_zone_id",
-            "age",
-            "work_zone_id",
-            "TAZ",
-            "home_x",
-            "home_y",
-        ],
+        [c for c in persons.columns if c in cols_to_keep],
     ].copy()
 
 
@@ -144,21 +154,22 @@ def filterHouseholds(households: pd.DataFrame):
 
 
 def filterTrips(trips: pd.DataFrame):
+    cols_to_keep = [
+        "person_id",
+        "household_id",
+        "tour_id",
+        "primary_purpose",
+        "purpose",
+        "destination",
+        "origin",
+        "destination_logsum",
+        "depart",
+        "trip_mode",
+        "mode_choice_logsum",
+    ]
     return trips.loc[
         :,
-        [
-            "person_id",
-            "household_id",
-            "tour_id",
-            "primary_purpose",
-            "purpose",
-            "destination",
-            "origin",
-            "destination_logsum",
-            "depart",
-            "trip_mode",
-            "mode_choice_logsum",
-        ],
+        [c for c in trips.columns if c in cols_to_keep],
     ].copy()
 
 
@@ -816,11 +827,18 @@ def mergeWithTripsAndAggregate(events, trips, utilities, persons):
     return final
 
 
-def labelNetworkWithTaz(network: pd.DataFrame, TAZ: gpd.GeoDataFrame, taz_column: str):
+def labelNetworkWithTaz(
+    network: pd.DataFrame,
+    TAZ: gpd.GeoDataFrame,
+    taz_column: str,
+    crs: str = "epsg:26910",
+):
     gdf = gpd.GeoDataFrame(
         network,
         geometry=gpd.points_from_xy(
-            network["toLocationX"], network["toLocationY"], crs="epsg:26910"
+            network["toLocationX"],
+            network["toLocationY"],
+            crs=crs,  # TODO: Match CRS with TAZ
         ),
     ).sjoin(TAZ.loc[:, [taz_column, "geometry"]], how="left")
     return pd.DataFrame(gdf.drop(columns=["geometry", "index_right"]))

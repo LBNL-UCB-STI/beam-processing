@@ -22,7 +22,7 @@ scenarioToLoc = {
     "newmap-jdeq-0.09-0.25": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.09-storage-25__2024-02-09_08-24-43_mdn",
     "newmap-jdeq-0.07-0.5": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.07-storage-5__2024-02-08_01-50-01_guw",
     "newmap-jdeq-0.07-1.0": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-newmap-jdeq-0.07__2024-01-26_00-30-11_fgz",
-    "resmap-jdeq-0.07-0.5":"https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-res-jdeq-0.07-0.5__2024-02-15_00-00-01_gqf"
+    "resmap-jdeq-0.07-0.5": "https://storage.googleapis.com/beam-core-outputs/output/testing/sfbay-res-jdeq-0.07-0.5__2024-02-15_00-00-01_gqf",
 }
 
 results = dict()

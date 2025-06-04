@@ -72,6 +72,7 @@ from src.outputDataFrame import (
     PassengerMilesByVehicleAndModeByIteration,
     RealizedModeCountByIteration,
     CongestionInfoByIteration,
+    LinkStatsFromRawFile,
 )
 from src.transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
 
@@ -233,12 +234,17 @@ class BeamOutputData(ModelOutputData):
             self._pathTraversalEvents,  # Pass the processed PTs object
             self.inputDirectory.numberOfIterations,
         )
+        self.linkStatsFromRawFile = LinkStatsFromRawFile(
+            self.outputDataDirectory,
+            self.inputDirectory,
+            self.inputDirectory.numberOfIterations,
+        )
         self.labeledNetwork = LabeledNetwork(
             self.outputDataDirectory, self.inputDirectory
         )
         self.labeledLinkStatsFile = LabeledLinkStatsFile(
             self.outputDataDirectory,
-            self.inputDirectory.linkStatsFile(),
+            self.linkStatsFromPathTraversals,
             self.labeledNetwork,
             self.geometry,
         )
@@ -465,7 +471,7 @@ class ActivitySimOutputData(ModelOutputData):
         self,
         outputDataDirectory: OutputDataDirectory,
         activitySimRunInputDirectory: ActivitySimRunInputDirectory,
-        skims: ProcessedSkimsFile,
+        skims: Optional[ProcessedSkimsFile] = None,
         geometry: Optional[Geometry] = Geometry(),
     ):
         super().__init__(outputDataDirectory, activitySimRunInputDirectory)
@@ -504,13 +510,16 @@ class ActivitySimOutputData(ModelOutputData):
         # Note: TripPMT and related classes require skims which might not be available for all ASIM runs
         # if skims are only defined for the base year in PilatesRunInputDirectory.
         # Add checks or ensure skims is always available.
-        self.tripPMT = TripPMT(self.outputDataDirectory, self.trips, self.skims)
-        self.tripPMTByOrigin = TripPMTByOrigin(
-            self.outputDataDirectory, self.trips, self.skims
-        )
-        self.tripPMTByPrimaryPurpose = TripPMTByPrimaryPurpose(
-            self.outputDataDirectory, self.trips, self.skims
-        )
+        if self.skims is not None:
+            self.tripPMT = TripPMT(self.outputDataDirectory, self.trips, self.skims)
+            self.tripPMTByOrigin = TripPMTByOrigin(
+                self.outputDataDirectory, self.trips, self.skims
+            )
+            self.tripPMTByPrimaryPurpose = TripPMTByPrimaryPurpose(
+                self.outputDataDirectory, self.trips, self.skims
+            )
+        else:
+            print("No skims provided.")
         self.tripModeCount = TripModeCount(
             self.outputDataDirectory, self.trips, self.geometry
         )

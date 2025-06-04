@@ -13,7 +13,7 @@ outputPath = "gs://cruise-outputs/sfbay_cruise_SAVBaseline_1_phase2_66"
 
 pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
     outputPath,
-    years=[2018,2019,2020],
+    years=[2018, 2019, 2020],
     asimLiteIterations=3,
     beamIterations=1,
     region="SFBay",
@@ -24,8 +24,8 @@ pilatesData = outputDataDirectory.PilatesOutputData(
     pilatesDirectory,
     region="SFBay",
 )
-tmc = pilatesData.tourModeCountPerIteration.dataFrame['count'].unstack()
-mc = pilatesData.tripModeCountPerIteration.dataFrame['count'].unstack()
+tmc = pilatesData.tourModeCountPerIteration.dataFrame["count"].unstack()
+mc = pilatesData.tripModeCountPerIteration.dataFrame["count"].unstack()
 
 outputPath2 = "https://storage.cloud.google.com/cruise-outputs/sfbay_cruise_SAVBaseline_1_phase2_65"
 
@@ -44,8 +44,8 @@ pilatesData2 = outputDataDirectory.PilatesOutputData(
 )
 ss = pilatesData2.scoreStatsByIteration.dataFrame
 
-tmc2 = pilatesData2.tourModeCountPerIteration.dataFrame['count'].unstack()
-mc2 = pilatesData2.tripModeCountPerIteration.dataFrame['count'].unstack()
+tmc2 = pilatesData2.tourModeCountPerIteration.dataFrame["count"].unstack()
+mc2 = pilatesData2.tripModeCountPerIteration.dataFrame["count"].unstack()
 mc = pilatesData.tripModeCountPerIteration.dataFrame
 look2 = pilatesData.scoreStatsByIteration.dataFrame
 

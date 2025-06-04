@@ -1,5 +1,6 @@
 from src import input, outputDataDirectory
 import os
+
 os.environ["GCLOUD_PROJECT"] = "1010663794916"
 
 # Ensure the output directory exists
@@ -46,20 +47,24 @@ print("\n--- Processing Pilates run ---")
 # Replace with an actual Pilates run path (can be local or gs://)
 # Note: Pilates runs contain ASIM output within subfolders like 'activitysim/output/year-YYYY-iteration-I'
 # and BEAM output within 'beam/beam_output/REGION/year-YYYY-iteration-I'
-pilatesFolderName = (
-    "gs://beam-core-outputs/seattle-util-diff-20240715" # Example path
-)
+pilatesFolderName = "gs://beam-core-outputs/seattle-util-diff-20240715"  # Example path
 # Specify the years, ASIM iterations (usually the last one matters for ASIM outputs),
 # and BEAM iterations (last one matters for BEAM outputs).
 pilatesInputDirectory = input.PilatesRunInputDirectory(
-    pilatesFolderName, years=[2010,2012, 2014, 2016, 2018, 2020], asimLiteIterations=2, beamIterations=0, region="Seattle"
+    pilatesFolderName,
+    years=[2010, 2012, 2014, 2016, 2018, 2020],
+    asimLiteIterations=2,
+    beamIterations=0,
+    region="Seattle",
 )
 
 # Create the output data object for this Pilates run
 pilatesData = outputDataDirectory.PilatesOutputData(
-    outputDataDirectory.OutputDataDirectory(os.path.join(output_base_path, "pilates_run")),
+    outputDataDirectory.OutputDataDirectory(
+        os.path.join(output_base_path, "pilates_run")
+    ),
     pilatesInputDirectory,
-    region="Seattle" # Ensure region is specified consistently
+    region="Seattle",  # Ensure region is specified consistently
 )
 
 # Access and save some outputs from the Pilates run aggregation classes
@@ -69,22 +74,22 @@ if mand_locs is not None and not mand_locs.empty:
     pilatesData.mandatoryLocationsByTazByYear.toCsv()
     print("Mandatory Locations By TAZ By Year saved.")
 else:
-     print("No Mandatory Locations By TAZ By Year data found.")
+    print("No Mandatory Locations By TAZ By Year data found.")
 
 
 print("\nSaving Trip PMT By Year...")
 trip_pmt_year = pilatesData.tripPMTPerYear.dataFrame
 if trip_pmt_year is not None and not trip_pmt_year.empty:
-     pilatesData.tripPMTPerYear.toCsv()
-     print("Trip PMT By Year saved.")
+    pilatesData.tripPMTPerYear.toCsv()
+    print("Trip PMT By Year saved.")
 else:
-     print("No Trip PMT By Year data found.")
+    print("No Trip PMT By Year data found.")
 
 
 # Example of running Inexus processing for a specific year/iteration
 print("\n--- Running Inexus processing for a specific year/iteration ---")
 target_year = 2017
-target_iter = 3 # Use the last iteration for ASIM typically
+target_iter = 3  # Use the last iteration for ASIM typically
 
 # The runInexus method is now called on the PilatesOutputData object,
 # but the actual processing logic is delegated to the BeamOutputData instance for that run.
@@ -93,14 +98,23 @@ print(f"Running Inexus for year {target_year}, iteration {target_iter}")
 processedPersonTrips_2017_3 = pilatesData.runInexus(target_year, target_iter)
 
 if processedPersonTrips_2017_3 is not None and not processedPersonTrips_2017_3.empty:
-    print(f"Inexus processing complete. Result shape: {processedPersonTrips_2017_3.shape}")
+    print(
+        f"Inexus processing complete. Result shape: {processedPersonTrips_2017_3.shape}"
+    )
     # Save the resulting aggregated trip DataFrame
-    output_file_path = os.path.join(pilatesData.outputDataDirectory.path, f"inexus_year{target_year}_iter{target_iter}.csv")
+    output_file_path = os.path.join(
+        pilatesData.outputDataDirectory.path,
+        f"inexus_year{target_year}_iter{target_iter}.csv",
+    )
     print(f"Saving processed person trips to {output_file_path}...")
-    processedPersonTrips_2017_3.to_csv(output_file_path, index=False) # Save without index for final table
+    processedPersonTrips_2017_3.to_csv(
+        output_file_path, index=False
+    )  # Save without index for final table
     print("Processed person trips saved.")
 else:
-    print(f"Inexus processing failed or returned no data for year {target_year}, iteration {target_iter}.")
+    print(
+        f"Inexus processing failed or returned no data for year {target_year}, iteration {target_iter}."
+    )
 
 
 # Example of accessing data aggregated across iterations for a year (e.g. 2017, iter 1, 2, 3)

@@ -5902,10 +5902,10 @@ class CongestionInfoByYear(TAZBasedDataFrame, InfoByYear):
             outputDataDirectory,
             pilatesRunInputDirectory,
             geometry=pilatesRunInputDirectory.geometry,
-            geoIndex=pilatesRunInputDirectory.geometry.index
-            # pilatesInputDict=pilatesInputDict,
-            # accessor=accessor,
-            # columns=columns,
+            geoIndex=pilatesRunInputDirectory.geometry.index,
+            pilatesInputDict=pilatesInputDict,
+            accessor=accessor,
+            columns=columns
         )
 
         self.pilatesInputDict = pilatesInputDict
@@ -5975,10 +5975,10 @@ class CongestionInfoByIteration(TAZBasedDataFrame, InfoByIteration):
             outputDataDirectory,
             pilatesRunInputDirectory,
             geometry=pilatesRunInputDirectory.geometry,
-            geoIndex=pilatesRunInputDirectory.geometry.index
-            # pilatesInputDict=pilatesInputDict,
-            # accessor=accessor,
-            # columns=columns,
+            geoIndex=pilatesRunInputDirectory.geometry.index,
+            pilatesInputDict=pilatesInputDict,
+            accessor=accessor,
+            columns=columns,
         )
 
         self.pilatesInputDict = pilatesInputDict

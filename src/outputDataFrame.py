@@ -1500,6 +1500,7 @@ class LinkStatsFromRawFile(OutputDataFrame, EitherLinkStatsFile):
 
         # Calculate the hash key based on the input directory and iteration.
         # This ensures the cache location is unique for each run/iteration of the raw file source.
+        hash_key = kwargs.pop('hash_key', None)
         m = hashlib.md5()
         input_path_str = str(getattr(inputDirectory, "directoryPath", ""))
         m.update(input_path_str.encode())
@@ -1606,13 +1607,15 @@ class LinkStatsFromPathTraversals(OutputDataFrame, EitherLinkStatsFile):
         self.pathTraversalEvents = pathTraversalEvents
         # The input directory for this class's hashing should be the input directory of the PT source
         inputDirectory = pathTraversalEvents.inputDirectory
+        self.inputDirectory = inputDirectory  # Store inputDirectory for OutputDataFrame
 
         # Calculate the hash key based on the input directory of the PT source and iteration.
         # This ensures the cache location is unique for each run/iteration of the calculated source.
+        # Consume hash_key from kwargs before passing to super, in case it was passed by a caller.
+        hash_key = kwargs.pop('hash_key', None)
         m = hashlib.md5()
         input_path_str = str(getattr(inputDirectory, "directoryPath", ""))
         m.update(input_path_str.encode())
-        m.update(self.__class__.__name__.encode())  # Use this class's name
         m.update(str(self.iteration).encode())  # Include iteration in hash
         calculated_hash = m.hexdigest()
 
@@ -2758,6 +2761,7 @@ class NetworkVolumesByLink(OutputDataFrame):
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame
         source: EitherLinkStatsFile,  # Source must be an EitherLinkStatsFile
+        labeledNetwork: LabeledNetwork,  # Explicitly capture LabeledNetwork
         *args,
         **kwargs,
     ):
@@ -2770,6 +2774,7 @@ class NetworkVolumesByLink(OutputDataFrame):
         """
         # Store the source (EitherLinkStatsFile)
         self.source = source
+        self.labeledNetwork = labeledNetwork
 
         # Calculate hash key based on the source object's hash and this class name.
         m = hashlib.md5()
@@ -2898,6 +2903,8 @@ class NetworkVolumesByLink(OutputDataFrame):
             df["VHT_hour"] = (
                 df.traveltime * df.volume / 3600.0
             )  # traveltime likely in seconds
+            df['VMT_hour'] = df['volume'] * df['length'] / 1609.34  # Assuming length is in meters
+            df['VHT_hour_ff'] = df['length'] / df['freespeed'] * df['volume'] / 3600.0
 
             # Group by link (the first level of the index) and sum VHT across all hours
             # Ensure 'link' is the first level name for groupby
@@ -2909,7 +2916,10 @@ class NetworkVolumesByLink(OutputDataFrame):
                     columns=["vht"], index=pd.Index([], name=self.indexedOn)
                 )
 
-            df_agg = df.groupby(level="link").agg(vht=("VHT_hour", "sum"))
+            df_agg = df.groupby(level="link").agg(vht=("VHT_hour", "sum"), vmt=("VMT_hour", "sum"), vht_ff=("VHT_hour_ff", "sum"))
+            df_agg['mph'] = df_agg['vmt'] / df_agg['vht']
+            df_agg['mph_ff'] = df_agg['vmt'] / df_agg['vht_ff']
+            df_agg['delay_h'] = df_agg['vht'] - df_agg['vht_ff']
 
             df_agg.index.name = self.indexedOn  # Set index name for the output DF
             print(
@@ -3002,9 +3012,11 @@ class NetworkVolumesByLinkByIteration(OutputDataFrame):
                     # This requires the inputDirectory object to have a method like linkStatsFile(it)
                     # The BeamRunInputDirectory class *does* have this method.
                     # Accessing inputDirectory from super() should work.
-                    source_obj = self.inputDirectory.linkStatsFile(
-                        it
-                    )  # Assumes BeamRunInputDirectory input
+                    source_obj = LinkStatsFromRawFile(
+                        self.outputDataDirectory,
+                        self.inputDirectory,
+                        it,
+                    )
 
                     # Create a NetworkVolumesByLink instance for this iteration's source
                     # Pass self.outputDataDirectory and the specific source object
@@ -5890,9 +5902,10 @@ class CongestionInfoByYear(TAZBasedDataFrame, InfoByYear):
             outputDataDirectory,
             pilatesRunInputDirectory,
             geometry=pilatesRunInputDirectory.geometry,
-            pilatesInputDict=pilatesInputDict,
-            accessor=accessor,
-            columns=columns,
+            geoIndex=pilatesRunInputDirectory.geometry.index
+            # pilatesInputDict=pilatesInputDict,
+            # accessor=accessor,
+            # columns=columns,
         )
 
         self.pilatesInputDict = pilatesInputDict
@@ -5962,9 +5975,10 @@ class CongestionInfoByIteration(TAZBasedDataFrame, InfoByIteration):
             outputDataDirectory,
             pilatesRunInputDirectory,
             geometry=pilatesRunInputDirectory.geometry,
-            pilatesInputDict=pilatesInputDict,
-            accessor=accessor,
-            columns=columns,
+            geoIndex=pilatesRunInputDirectory.geometry.index
+            # pilatesInputDict=pilatesInputDict,
+            # accessor=accessor,
+            # columns=columns,
         )
 
         self.pilatesInputDict = pilatesInputDict

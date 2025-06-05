@@ -1296,5 +1296,5 @@ class PilatesRunInputDirectory(InputDirectory):
                     relPath.append(region.lower())
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
-                    self.append(relPath), beamIterations, self.geometry, file_format
+                    self.append(relPath), beamIterations, self.geometry, region, file_format
                 )

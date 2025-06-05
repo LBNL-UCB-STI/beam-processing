@@ -3,7 +3,7 @@ from urllib.error import HTTPError
 import pandas as pd
 
 from src.input_directories import (
-    PilatesRunInputDirectory,
+    PilatesRunOutputDirectory,
 )
 from src.output_container import OutputDataDirectory
 from src.pilates_output_container import PilatesOutputData
@@ -32,7 +32,7 @@ class PilatesAnalysis:
         self.allPilatesSettings = allPilatesSettings
         self._runs = dict()
         for ps in self.allPilatesSettings:
-            directory = PilatesRunInputDirectory(
+            directory = PilatesRunOutputDirectory(
                 ps.path,
                 ps.years,
                 ps.asimLiteIteratsions,

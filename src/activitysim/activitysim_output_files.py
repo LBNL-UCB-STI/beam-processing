@@ -9,12 +9,12 @@ from zipfile import ZipFile
 import pandas as pd
 from tqdm import tqdm
 
-from src.input_base import RawOutputFile, InputDirectory
+from src.input_base import RawOutputFile, OutputDirectory
 from src.constants import TMP_DIR
 
 
 class TripUtilitiesFiles(RawOutputFile):
-    def __init__(self, inputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: OutputDirectory):
         relativePath = "trip_mode_choice.zip"
         super().__init__(inputDirectory, relativePath, index_col="person_id")
         # self._file = None # Handled by base class
@@ -174,7 +174,7 @@ class TripUtilitiesFiles(RawOutputFile):
 
 
 class PersonsFile(RawOutputFile):
-    def __init__(self, inputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: OutputDirectory):
         if inputDirectory.file_format == "csv":
             relativePath = "persons.csv.gz"
         else:
@@ -193,7 +193,7 @@ class PersonsFile(RawOutputFile):
 
 
 class HouseholdsFile(RawOutputFile):
-    def __init__(self, inputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: OutputDirectory):
         if inputDirectory.file_format == "csv":
             relativePath = "households.csv.gz"
         else:
@@ -209,7 +209,7 @@ class HouseholdsFile(RawOutputFile):
 
 
 class TripsFile(RawOutputFile):
-    def __init__(self, inputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: OutputDirectory):
         if inputDirectory.file_format == "csv":
             relativePath = "final_trips.csv.gz"
         else:
@@ -271,7 +271,7 @@ class TripsFile(RawOutputFile):
 
 
 class ToursFile(RawOutputFile):
-    def __init__(self, inputDirectory: InputDirectory):
+    def __init__(self, inputDirectory: OutputDirectory):
         if inputDirectory.file_format == "csv":
             relativePath = "final_tours.csv.gz"
         else:

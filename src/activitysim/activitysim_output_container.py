@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from src.activitysim.activitysim_input_directory import ActivitySimRunInputDirectory
+from src.activitysim.activitysim_input_directory import ActivitySimRunOutputDirectory
 from src.geometry import Geometry
 from src.input_base import gcs_blob_exists
 from src.activitysim.activitysim_processed_data_frame import (
@@ -26,12 +26,12 @@ class ActivitySimOutputData(ModelOutputData):
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
-        activitySimRunInputDirectory: ActivitySimRunInputDirectory,
+        activitySimRunInputDirectory: ActivitySimRunOutputDirectory,
         skims: Optional[ProcessedSkimsFile] = None,
         geometry: Optional[Geometry] = Geometry(),
     ):
         super().__init__(outputDataDirectory, activitySimRunInputDirectory)
-        assert isinstance(self.inputDirectory, ActivitySimRunInputDirectory)
+        assert isinstance(self.inputDirectory, ActivitySimRunOutputDirectory)
         self.skims = skims
         self.geometry = geometry
         lu_file_path = activitySimRunInputDirectory.append("final_land_use.csv.gz")

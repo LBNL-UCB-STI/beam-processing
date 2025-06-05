@@ -11,9 +11,9 @@ from google.cloud import storage
 from src.constants import TMP_DIR
 
 
-class InputDirectory:
+class OutputDirectory:
     """
-    Represents an input directory of raw data for postprocessing
+    Represents directory of raw data for postprocessing
 
     Attributes:
         directoryPath (str): The path to the directory.
@@ -54,7 +54,7 @@ class RawOutputFile:
 
     Attributes:
         filePath (str): The path (local or URL) to the output file.
-        inputDirectory (InputDirectory): The parent input directory.
+        inputDirectory (OutputDirectory): The parent input directory.
         index_col: Optional parameter for specifying the column(s) to use as the row labels.
         dtype: Optional parameter for specifying column data types.
         _file: Internal variable to store the loaded file DataFrame.
@@ -62,7 +62,7 @@ class RawOutputFile:
 
     def __init__(
         self,
-        inputDirectory: InputDirectory,
+        inputDirectory: OutputDirectory,
         relativePath: Union[str, List[str]],  # Allow relativePath to be list or string
         index_col=None,
         dtype=None,

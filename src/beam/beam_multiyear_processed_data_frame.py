@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Tuple
 
 import pandas as pd
 
-from src.beam.beam_input_directory import BeamRunInputDirectory
+from src.beam.beam_input_directory import BeamRunOutputDirectory
 from src.beam.beam_output_files import LinkStatsFile
 from src.beam.beam_processed_data_frame import (
     LabeledNetwork,
@@ -11,13 +11,12 @@ from src.beam.beam_processed_data_frame import (
     NetworkVolumesByLink,
 )
 from src.constants import CONGESTION_THRESHOLD_MPH
-from src.input_directories import PilatesRunInputDirectory
+from src.input_directories import PilatesRunOutputDirectory
 from src.processed_data_frame import (
     ProcessedDataFrame,
-    InfoByIteration,
-    InfoByYear,
-    TAZBasedDataFrame,
 )
+from src.processed_data_frame_aggregators import InfoByYear, InfoByIteration
+from src.processed_data_frame_mixins import TAZBasedDataFrame
 
 
 class NetworkVolumesByLinkByIteration(ProcessedDataFrame):
@@ -30,7 +29,7 @@ class NetworkVolumesByLinkByIteration(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame
-        inputDirectory: BeamRunInputDirectory,  # Needed by OutputDataFrame
+        inputDirectory: BeamRunOutputDirectory,  # Needed by OutputDataFrame
         labeledNetwork: LabeledNetwork,  # Dependency, likely for geometry/TAZ mapping downstream
         iterations: List[int],
         inputType: Optional[
@@ -155,7 +154,7 @@ class ReplanningEventReasonByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -200,7 +199,7 @@ class ScoreStatsByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -243,7 +242,7 @@ class ModeVMTByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame, InfoByYear
-        pilatesRunInputDirectory: PilatesRunInputDirectory,  # Needed by OutputDataFrame, InfoByYear
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,  # Needed by OutputDataFrame, InfoByYear
         pilatesInputDict: Dict[
             Tuple[int, int], "BeamRunOutputData"
         ],  # Needed by InfoByYear
@@ -285,7 +284,7 @@ class ModeEnergyByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -324,7 +323,7 @@ class ModePMTByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -363,7 +362,7 @@ class ModePMTByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -402,7 +401,7 @@ class CongestionInfoByYear(TAZBasedDataFrame, InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -498,7 +497,7 @@ class CongestionInfoByIteration(TAZBasedDataFrame, InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -571,7 +570,7 @@ class PassengerMilesByVehicleAndModeByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -599,7 +598,7 @@ class PassengerMilesByVehicleAndModeByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
@@ -625,7 +624,7 @@ class RealizedModeCountByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         def accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:

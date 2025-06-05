@@ -13,7 +13,7 @@ os.chdir("../")
 
 outputPath = "gs://cruise-outputs/sfbay_cruise_SAVBaseline_1_phase2_66"
 
-pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
+pilatesDirectory = outputDataDirectory.PilatesRunOutputDirectory(
     outputPath,
     years=[2018, 2019, 2020],
     asimLiteIterations=3,
@@ -31,7 +31,7 @@ mc = pilatesData.tripModeCountPerIteration.dataFrame["count"].unstack()
 
 outputPath2 = "https://storage.cloud.google.com/cruise-outputs/sfbay_cruise_SAVBaseline_1_phase2_65"
 
-pilatesDirectory2 = outputDataDirectory.PilatesRunInputDirectory(
+pilatesDirectory2 = outputDataDirectory.PilatesRunOutputDirectory(
     outputPath2,
     years=[2018, 2019, 2020],
     asimLiteIterations=3,

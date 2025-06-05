@@ -4,14 +4,14 @@ from typing import Iterable
 
 import numpy as np
 
-from src.activitysim.activitysim_input_directory import ActivitySimRunInputDirectory
-from src.beam.beam_input_directory import BeamRunInputDirectory
+from src.activitysim.activitysim_input_directory import ActivitySimRunOutputDirectory
+from src.beam.beam_input_directory import BeamRunOutputDirectory
 from src.geometry import Geometry, SfBayGeometry, AustinGeometry, SeattleGeometry
-from src.input_base import InputDirectory
-from src.beam.beam_output_files import SkimsFile
+from src.input_base import OutputDirectory
+from src.skims_file import SkimsFile
 
 
-class PilatesRunInputDirectory(InputDirectory):
+class PilatesRunOutputDirectory(OutputDirectory):
     def __init__(
         self,
         baseFolderName: str,
@@ -49,7 +49,7 @@ class PilatesRunInputDirectory(InputDirectory):
                     relPath.append("output")
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))
-                self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunInputDirectory(
+                self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunOutputDirectory(
                     self.append(relPath), self.geometry, file_format
                 )
                 relPath = ["beam"]
@@ -57,7 +57,7 @@ class PilatesRunInputDirectory(InputDirectory):
                     relPath.append("beam_output")
                     relPath.append(region.lower())
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
-                self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
+                self.beamRuns[(year, asimLiteIteration)] = BeamRunOutputDirectory(
                     self.append(relPath),
                     beamIterations,
                     self.geometry,

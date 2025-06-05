@@ -4,8 +4,8 @@ from multiprocessing import cpu_count
 import pandas as pd
 from joblib import Parallel, delayed
 
-from src.activitysim.activitysim_input_directory import ActivitySimRunInputDirectory
-from src.beam.beam_input_directory import BeamRunInputDirectory
+from src.activitysim.activitysim_input_directory import ActivitySimRunOutputDirectory
+from src.beam.beam_input_directory import BeamRunOutputDirectory
 from src.input_base import gcs_blob_exists
 from src.output_container import ModelOutputData, OutputDataDirectory
 from src.beam.beam_multiyear_processed_data_frame import NetworkVolumesByLinkByIteration
@@ -38,7 +38,7 @@ class BeamOutputData(ModelOutputData):
 
     Attributes:
         outputDataDirectory (src.output_container.OutputDataDirectory): The output data directory.
-        inputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+        inputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
         pathTraversalEvents (src.beam.beam_processed_data_frame.PathTraversalEvents): Path traversal events data.
         personEntersVehicleEvents (src.beam.beam_processed_data_frame.PersonEntersVehicleEvents): Person enters vehicle events data.
         modeChoiceEvents (src.beam.beam_processed_data_frame.ModeChoiceEvents): Mode choice events data.
@@ -50,7 +50,7 @@ class BeamOutputData(ModelOutputData):
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
-        beamRunInputDirectory: BeamRunInputDirectory,
+        beamRunInputDirectory: BeamRunOutputDirectory,
         collectEvents=False,
     ):
         """
@@ -58,11 +58,11 @@ class BeamOutputData(ModelOutputData):
 
         Parameters:
             outputDataDirectory (src.output_container.OutputDataDirectory): The output data directory.
-            beamRunInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+            beamRunInputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
             collectEvents (bool): Whether to eagerly collect event files during initialization.
         """
         super().__init__(outputDataDirectory, beamRunInputDirectory)
-        assert isinstance(self.inputDirectory, BeamRunInputDirectory)
+        assert isinstance(self.inputDirectory, BeamRunOutputDirectory)
         self.outputDataDirectory = outputDataDirectory
         log_file_path = beamRunInputDirectory.append("beamLog.out")
         if self.remoteResults and log_file_path.startswith("gs://"):
@@ -173,7 +173,7 @@ class BeamOutputData(ModelOutputData):
         )
 
     # Add a method to run the aggregated trip processing (formerly part of PilatesOutputData.runInexus)
-    def getAggregatedTrips(self, asimRunInputDirectory: ActivitySimRunInputDirectory):
+    def getAggregatedTrips(self, asimRunInputDirectory: ActivitySimRunOutputDirectory):
         """
         Orchestrates the processing of Beam events and ActivitySim outputs to
         produce a single aggregated DataFrame of person trips.
@@ -190,7 +190,7 @@ class BeamOutputData(ModelOutputData):
         7. Combining results from chunks.
 
         Parameters:
-            asimRunInputDirectory (ActivitySimRunInputDirectory): The corresponding ActivitySim input directory.
+            asimRunInputDirectory (ActivitySimRunOutputDirectory): The corresponding ActivitySim input directory.
 
         Returns:
             pd.DataFrame: A DataFrame where each row is a trip, aggregated from events

@@ -5,7 +5,7 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import os
 
-from src.input_directories import PilatesRunInputDirectory
+from src.input_directories import PilatesRunOutputDirectory
 from src.output_container import OutputDataDirectory
 from src.pilates_output_container import PilatesOutputData
 
@@ -22,7 +22,7 @@ folderName = (
 )
 
 
-directory = PilatesRunInputDirectory(folderName, [2010], 2, 2)
+directory = PilatesRunOutputDirectory(folderName, [2010], 2, 2)
 run = PilatesOutputData(OutputDataDirectory("output/{0}".format("base-gen")), directory)
 
 tours = run.asimRuns[(2010, 2)].tours.dataFrame

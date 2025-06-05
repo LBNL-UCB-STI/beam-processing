@@ -5,14 +5,13 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-from src.beam.beam_input_directory import BeamRunInputDirectory
+from src.beam.beam_input_directory import BeamRunOutputDirectory
 from src.constants import TMP_DIR
 from src.geometry import Geometry
 from src.processed_data_frame import (
     ProcessedDataFrame,
-    EitherLinkStatsFile,
-    TAZBasedDataFrame,
 )
+from src.processed_data_frame_mixins import EitherLinkStatsFile, TAZBasedDataFrame
 from src.beam.beam_transformations import getLinkStatsFromPathTraversals, fixPathTraversals, labelNetworkWithTaz, \
     mergeLinkstatsWithNetwork
 
@@ -22,14 +21,14 @@ class PathTraversalEvents(ProcessedDataFrame):
     Represents path traversal events data extracted from an events file and then preprocessed
 
     Attributes:
-        beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+        beamInputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
         indexedOn: The column to use as the index when loading data.
     """
 
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamInputDirectory: BeamRunInputDirectory,
+        beamInputDirectory: BeamRunOutputDirectory,
         *args,
         **kwargs,
     ):
@@ -38,7 +37,7 @@ class PathTraversalEvents(ProcessedDataFrame):
 
         Parameters:
             outputDataDirectory (OutputDataDirectory): The output data directory.
-            beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+            beamInputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
         """
         super().__init__(outputDataDirectory, beamInputDirectory, *args, **kwargs)
         self.beamInputDirectory = beamInputDirectory
@@ -106,7 +105,7 @@ class PersonTrips(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamInputDirectory: BeamRunInputDirectory,
+        beamInputDirectory: BeamRunOutputDirectory,
         *args,
         **kwargs,
     ):
@@ -334,14 +333,14 @@ class PersonEntersVehicleEvents(ProcessedDataFrame):
     Represents person enters vehicle events data from the raw events file.
 
     Attributes:
-        beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+        beamInputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
         indexedOn: The column to use as the index when loading data.
     """
 
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamInputDirectory: BeamRunInputDirectory,
+        beamInputDirectory: BeamRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -350,7 +349,7 @@ class PersonEntersVehicleEvents(ProcessedDataFrame):
 
         Parameters:
             outputDataDirectory (OutputDataDirectory): The output data directory.
-            beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+            beamInputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
         """
         # Pass args/kwargs up to OutputDataFrame
         super().__init__(outputDataDirectory, beamInputDirectory, *args, **kwargs)
@@ -391,14 +390,14 @@ class ModeChoiceEvents(ProcessedDataFrame):
     Represents mode choice events data.
 
     Attributes:
-        beamInputDirectory (BeamRunInputDirectory): The input directory for the Beam run.
+        beamInputDirectory (BeamRunOutputDirectory): The input directory for the Beam run.
         indexedOn: The column to use as the index when loading data.
     """
 
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamInputDirectory: BeamRunInputDirectory,
+        beamInputDirectory: BeamRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -816,7 +815,7 @@ class ReplanningEventReasons(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamRunInputDirectory: BeamRunInputDirectory,
+        beamRunInputDirectory: BeamRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -866,7 +865,7 @@ class ScoreStats(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamRunInputDirectory: BeamRunInputDirectory,
+        beamRunInputDirectory: BeamRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -1081,7 +1080,7 @@ class LinkStatsFromRawFile(ProcessedDataFrame, EitherLinkStatsFile):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory.
-        inputDirectory (BeamRunInputDirectory): The input directory.
+        inputDirectory (BeamRunOutputDirectory): The input directory.
         iteration (int): The BEAM iteration number.
         source (LinkStatsFile): The underlying raw LinkStatsFile object.
         indexedOn (List[str]): The expected index names ('link', 'hour'). (Set by mixin setup)
@@ -1090,7 +1089,7 @@ class LinkStatsFromRawFile(ProcessedDataFrame, EitherLinkStatsFile):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        inputDirectory: "BeamRunInputDirectory",  # More specific type
+        inputDirectory: "BeamRunOutputDirectory",  # More specific type
         iteration: int,  # Need iteration to get the specific LinkStatsFile
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
@@ -1100,7 +1099,7 @@ class LinkStatsFromRawFile(ProcessedDataFrame, EitherLinkStatsFile):
 
         Parameters:
             outputDataDirectory (OutputDataDirectory): The output data directory.
-            inputDirectory (BeamRunInputDirectory): The input directory for the raw linkstats file.
+            inputDirectory (BeamRunOutputDirectory): The input directory for the raw linkstats file.
             iteration (int): The BEAM iteration number.
         """
         # Get the specific raw LinkStatsFile object for this iteration
@@ -1190,7 +1189,7 @@ class LinkStatsFromPathTraversals(ProcessedDataFrame, EitherLinkStatsFile):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory.
-        inputDirectory (BeamRunInputDirectory): The input directory (from the PathTraversalEvents source).
+        inputDirectory (BeamRunOutputDirectory): The input directory (from the PathTraversalEvents source).
         pathTraversalEvents (PathTraversalEvents): Path traversal events data source.
         iteration (int): The BEAM iteration number.
         indexedOn (List[str]): The expected index names ('link', 'hour'). (Set by mixin setup)
@@ -1314,7 +1313,7 @@ class LabeledNetwork(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        beamOutputData: BeamRunInputDirectory,
+        beamOutputData: BeamRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):

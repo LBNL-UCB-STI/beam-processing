@@ -1,4 +1,4 @@
-from src.input_base import InputDirectory
+from src.input_base import OutputDirectory
 
 
 class OutputDataDirectory:
@@ -15,7 +15,7 @@ class OutputDataDirectory:
 
 class ModelOutputData:
     def __init__(
-        self, outputDataDirectory: OutputDataDirectory, inputDirectory: InputDirectory
+        self, outputDataDirectory: OutputDataDirectory, inputDirectory: OutputDirectory
     ):
         self.outputDataDirectory = outputDataDirectory
         self.inputDirectory = inputDirectory

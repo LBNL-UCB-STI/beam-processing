@@ -3,10 +3,11 @@ from typing import Optional, List
 import numpy as np
 import pandas as pd
 
-from src.activitysim.activitysim_input_directory import ActivitySimRunInputDirectory
+from src.activitysim.activitysim_input_directory import ActivitySimRunOutputDirectory
 from src.geometry import Geometry
-from src.input_directories import PilatesRunInputDirectory
-from src.processed_data_frame import ProcessedDataFrame, TAZBasedDataFrame
+from src.input_directories import PilatesRunOutputDirectory
+from src.processed_data_frame import ProcessedDataFrame
+from src.processed_data_frame_mixins import TAZBasedDataFrame
 from src.activitysim.activitysim_transformations import filterPersons, filterHouseholds, filterTrips, filterTours
 
 
@@ -18,7 +19,7 @@ class ProcessedPersonsFile(ProcessedDataFrame):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        activitySimOutputData (ActivitySimRunOutputDirectory): The ActivitySim output data directory.
         indexedOn (str): The column used as the index for the DataFrame.
 
     Methods:
@@ -29,7 +30,7 @@ class ProcessedPersonsFile(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        activitySimOutputData: ActivitySimRunInputDirectory,
+        activitySimOutputData: ActivitySimRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -38,7 +39,7 @@ class ProcessedPersonsFile(ProcessedDataFrame):
 
         Parameters:
             outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-            activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+            activitySimOutputData (ActivitySimRunOutputDirectory): The ActivitySim output data directory.
         """
         # Pass args/kwargs up to OutputDataFrame
         super().__init__(outputDataDirectory, activitySimOutputData, *args, **kwargs)
@@ -132,7 +133,7 @@ class ProcessedHouseholdsFile(ProcessedDataFrame):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        activitySimOutputData (ActivitySimRunOutputDirectory): The ActivitySim output data directory.
         indexedOn (str): The column used as the index for the DataFrame.
 
     Methods:
@@ -143,7 +144,7 @@ class ProcessedHouseholdsFile(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        activitySimOutputData: ActivitySimRunInputDirectory,
+        activitySimOutputData: ActivitySimRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -243,7 +244,7 @@ class ProcessedTripsFile(ProcessedDataFrame):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        activitySimOutputData (ActivitySimRunOutputDirectory): The ActivitySim output data directory.
         indexedOn (str): The column used as the index for the DataFrame.
 
     Methods:
@@ -254,7 +255,7 @@ class ProcessedTripsFile(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        activitySimOutputData: ActivitySimRunInputDirectory,
+        activitySimOutputData: ActivitySimRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -352,7 +353,7 @@ class ProcessedToursFile(ProcessedDataFrame):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-        activitySimOutputData (ActivitySimRunInputDirectory): The ActivitySim output data directory.
+        activitySimOutputData (ActivitySimRunOutputDirectory): The ActivitySim output data directory.
         indexedOn (str): The column used as the index for the DataFrame.
 
     Methods:
@@ -363,7 +364,7 @@ class ProcessedToursFile(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        activitySimOutputData: ActivitySimRunInputDirectory,
+        activitySimOutputData: ActivitySimRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):
@@ -477,7 +478,7 @@ class ProcessedSkimsFile(ProcessedDataFrame):
 
     Attributes:
         outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-        pilatesOutputData (PilatesRunInputDirectory): The Pilates output data directory.
+        pilatesOutputData (PilatesRunOutputDirectory): The Pilates output data directory.
         indexedOn (list): The columns used as the index for the DataFrame.
 
     Methods:
@@ -488,7 +489,7 @@ class ProcessedSkimsFile(ProcessedDataFrame):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesOutputData: PilatesRunInputDirectory,
+        pilatesOutputData: PilatesRunOutputDirectory,
         *args,  # Accept args/kwargs for MI compatibility
         **kwargs,
     ):

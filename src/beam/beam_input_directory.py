@@ -1,7 +1,7 @@
 from typing import Optional
 
 from src.geometry import Geometry, SfBayGeometry, AustinGeometry, SeattleGeometry
-from src.input_base import InputDirectory
+from src.input_base import OutputDirectory
 from src.beam.beam_output_files import (
     EventsFile,
     LinkStatsFile,
@@ -12,7 +12,7 @@ from src.beam.beam_output_files import (
 )
 
 
-class BeamRunInputDirectory(InputDirectory):
+class BeamRunOutputDirectory(OutputDirectory):
     """
     Represents an input directory specific to a BEAM run.
 

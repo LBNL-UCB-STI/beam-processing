@@ -1,5 +1,5 @@
 from src.geometry import Geometry
-from src.input_base import InputDirectory
+from src.input_base import OutputDirectory
 from src.activitysim.activitysim_output_files import (
     TripUtilitiesFiles,
     PersonsFile,
@@ -9,7 +9,7 @@ from src.activitysim.activitysim_output_files import (
 )
 
 
-class ActivitySimRunInputDirectory(InputDirectory):
+class ActivitySimRunOutputDirectory(OutputDirectory):
     def __init__(self, baseFolderName: str, geometry=Geometry(), file_format="csv"):
         super().__init__(baseFolderName, file_format)
         self.householdsFile = HouseholdsFile(self)

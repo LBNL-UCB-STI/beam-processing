@@ -6,7 +6,7 @@ import pandas as pd
 from src.activitysim.activitysim_output_container import ActivitySimOutputData
 from src.beam.beam_output_container import BeamOutputData
 from src.geometry import SfBayGeometry, AustinGeometry, SeattleGeometry, Geometry
-from src.input_directories import PilatesRunInputDirectory
+from src.input_directories import PilatesRunOutputDirectory
 from src.activitysim.activitysim_multiyear_processed_data_frame import (
     TripPMTByYear,
     TripPMTByPrimaryPurposeByYear,
@@ -39,7 +39,7 @@ class PilatesOutputData(ModelOutputData):
     def __init__(
         self,
         outputDataDirectory: OutputDataDirectory,
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         region="SFBay",
         collectEvents: bool = False,
     ):

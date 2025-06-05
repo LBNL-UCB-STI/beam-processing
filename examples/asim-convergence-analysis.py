@@ -28,7 +28,7 @@ outputPath = (
     "https://storage.googleapis.com/beam-core-outputs/seattle-util-diff-20240715"
 )
 
-pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
+pilatesDirectory = outputDataDirectory.PilatesRunOutputDirectory(
     outputPath,
     years=[2017, 2018, 2019],
     asimLiteIterations=2,
@@ -55,7 +55,7 @@ look = pilatesData_new.congestionInfoByYear.dataFrame
 
 outputPath = "gs://beam-core-outputs/seattle-no-plans-20240716"
 
-pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
+pilatesDirectory = outputDataDirectory.PilatesRunOutputDirectory(
     outputPath,
     years=[2010, 2012, 2014, 2016],
     asimLiteIterations=2,
@@ -96,7 +96,7 @@ look = (
 )
 outputPath = "gs://beam-core-outputs/seattle-newplans-20240606"
 
-pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
+pilatesDirectory = outputDataDirectory.PilatesRunOutputDirectory(
     outputPath,
     years=[2010],
     asimLiteIterations=2,

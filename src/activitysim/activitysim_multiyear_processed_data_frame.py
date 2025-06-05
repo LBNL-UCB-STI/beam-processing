@@ -3,8 +3,9 @@ from typing import Dict, Tuple, Optional
 import pandas as pd
 
 from src.geometry import Geometry
-from src.input_directories import PilatesRunInputDirectory
-from src.processed_data_frame import InfoByYear, TAZBasedDataFrame, InfoByIteration
+from src.input_directories import PilatesRunOutputDirectory
+from src.processed_data_frame_aggregators import InfoByYear, InfoByIteration
+from src.processed_data_frame_mixins import TAZBasedDataFrame
 
 
 class TripPMTByYear(InfoByYear):
@@ -12,7 +13,7 @@ class TripPMTByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
     ):
         # Define the accessor function to get the data for a single year/iteration
@@ -57,7 +58,7 @@ class TripPMTByPrimaryPurposeByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
     ):
         # Define the accessor function to get the data for a single year/iteration
@@ -110,7 +111,7 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
-        pilatesRunInputDirectory: PilatesRunInputDirectory,  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
         pilatesInputDict: Dict[
             Tuple[int, int], "ActivitySimRunOutputData"
         ],  # Needed by InfoByYear
@@ -248,7 +249,7 @@ class MandatoryLocationByTazByYear(TAZBasedDataFrame, InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
-        pilatesRunInputDirectory: PilatesRunInputDirectory,  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
         pilatesInputDict: Dict[
             Tuple[int, int], "ActivitySimRunOutputData"
         ],  # Needed by InfoByYear
@@ -310,7 +311,7 @@ class TripModeCountByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
     ):
         def accessor(outputData: "ActivitySimRunOutputData") -> pd.DataFrame:
@@ -349,7 +350,7 @@ class TourModeCountByIteration(InfoByIteration):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "ActivitySimRunOutputData"],
     ):
         def accessor(outputData: "ActivitySimRunOutputData") -> pd.DataFrame:
@@ -383,7 +384,7 @@ class TripModeCountByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame, InfoByYear
-        pilatesRunInputDirectory: PilatesRunInputDirectory,  # Needed by OutputDataFrame, InfoByYear
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,  # Needed by OutputDataFrame, InfoByYear
         pilatesInputDict: Dict[
             Tuple[int, int], "ActivitySimRunOutputData"
         ],  # Needed by InfoByYear
@@ -430,7 +431,7 @@ class TourModeCountByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame, InfoByYear
-        pilatesRunInputDirectory: PilatesRunInputDirectory,  # Needed by OutputDataFrame, InfoByYear
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,  # Needed by OutputDataFrame, InfoByYear
         pilatesInputDict: Dict[
             Tuple[int, int], "ActivitySimRunOutputData"
         ],  # Needed by InfoByYear
@@ -476,7 +477,7 @@ class TripModeCountByCountyByYear(TAZBasedDataFrame, InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
-        pilatesRunInputDirectory: PilatesRunInputDirectory,  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,  # Needed by OutputDataFrame, TAZBasedDataFrame, InfoByYear
         pilatesInputDict: Dict[
             Tuple[int, int], "ActivitySimRunOutputData"
         ],  # Needed by InfoByYear
@@ -619,7 +620,7 @@ class TripsByYear(InfoByYear):
     Attributes:
 
         outputDataDirectory (OutputDataDirectory): The output data directory where the file is stored.
-        pilatesRunInputDirectory (PilatesRunInputDirectory): The Pilates run input directory.
+        pilatesRunInputDirectory (PilatesRunOutputDirectory): The Pilates run input directory.
         pilatesInputDict (Dict[Tuple[int, int], "BeamRunOutputData"]): A dictionary mapping years to corresponding BeamRunOutputData instances.
         indexedOn (str): The column used as the index for the DataFrame.
 
@@ -628,7 +629,7 @@ class TripsByYear(InfoByYear):
     def __init__(
         self,
         outputDataDirectory: "OutputDataDirectory",
-        pilatesRunInputDirectory: PilatesRunInputDirectory,
+        pilatesRunInputDirectory: PilatesRunOutputDirectory,
         pilatesInputDict: Dict[Tuple[int, int], "BeamRunOutputData"],
     ):
         # Define the accessor function to get the data for a single year/iteration

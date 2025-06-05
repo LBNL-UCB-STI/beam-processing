@@ -4,7 +4,7 @@ import traceback  # Import traceback for detailed error logging
 
 import src.output_container
 import src.pilates_output_container
-from src.input_directories import PilatesRunInputDirectory
+from src.input_directories import PilatesRunOutputDirectory
 
 # Add the parent directory of src to the Python path
 # This assumes the script is run from the project root directory (beam-processing/)
@@ -71,7 +71,7 @@ print(f"Local output directory: {local_scenario_output_path}")
 print("\n--- Initializing Pilates Input and Output Data ---")
 try:
     # Create the Pilates Input Directory object
-    pilatesInputDirectory = PilatesRunInputDirectory(
+    pilatesInputDirectory = PilatesRunOutputDirectory(
         PILATES_OUTPUT_PATH,
         years=PILATES_YEARS,
         asimLiteIterations=ASIM_LITE_ITERATIONS,

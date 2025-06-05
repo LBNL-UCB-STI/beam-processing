@@ -456,7 +456,9 @@ class EventsFile(RawOutputFile):
             for eventType in eventTypes:
                 __listOfFrames[eventType] = [
                     pd.read_parquet(
-                        self.filePath, filters=[("type", "==", eventType)]
+                        self.filePath,
+                        filters=[("type", "==", eventType)],
+                        dtype_backend="pyarrow",
                     ).dropna(how="all", axis=1)
                 ]
         for eventType in eventTypes:
@@ -1296,5 +1298,9 @@ class PilatesRunInputDirectory(InputDirectory):
                     relPath.append(region.lower())
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 self.beamRuns[(year, asimLiteIteration)] = BeamRunInputDirectory(
-                    self.append(relPath), beamIterations, self.geometry, region, file_format
+                    self.append(relPath),
+                    beamIterations,
+                    self.geometry,
+                    region,
+                    file_format,
                 )

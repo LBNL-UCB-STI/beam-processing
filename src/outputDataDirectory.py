@@ -260,7 +260,7 @@ class BeamOutputData(ModelOutputData):
             self.outputDataDirectory,
             self.inputDirectory,
             self.labeledNetwork,
-            list(range(self.inputDirectory.numberOfIterations+1)),
+            list(range(self.inputDirectory.numberOfIterations + 1)),
         )
 
     # Add a method to run the aggregated trip processing (formerly part of PilatesOutputData.runInexus)

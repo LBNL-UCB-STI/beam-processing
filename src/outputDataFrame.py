@@ -1500,7 +1500,7 @@ class LinkStatsFromRawFile(OutputDataFrame, EitherLinkStatsFile):
 
         # Calculate the hash key based on the input directory and iteration.
         # This ensures the cache location is unique for each run/iteration of the raw file source.
-        hash_key = kwargs.pop('hash_key', None)
+        hash_key = kwargs.pop("hash_key", None)
         m = hashlib.md5()
         input_path_str = str(getattr(inputDirectory, "directoryPath", ""))
         m.update(input_path_str.encode())
@@ -1612,7 +1612,7 @@ class LinkStatsFromPathTraversals(OutputDataFrame, EitherLinkStatsFile):
         # Calculate the hash key based on the input directory of the PT source and iteration.
         # This ensures the cache location is unique for each run/iteration of the calculated source.
         # Consume hash_key from kwargs before passing to super, in case it was passed by a caller.
-        hash_key = kwargs.pop('hash_key', None)
+        hash_key = kwargs.pop("hash_key", None)
         m = hashlib.md5()
         input_path_str = str(getattr(inputDirectory, "directoryPath", ""))
         m.update(input_path_str.encode())
@@ -2903,8 +2903,10 @@ class NetworkVolumesByLink(OutputDataFrame):
             df["VHT_hour"] = (
                 df.traveltime * df.volume / 3600.0
             )  # traveltime likely in seconds
-            df['VMT_hour'] = df['volume'] * df['length'] / 1609.34  # Assuming length is in meters
-            df['VHT_hour_ff'] = df['length'] / df['freespeed'] * df['volume'] / 3600.0
+            df["VMT_hour"] = (
+                df["volume"] * df["length"] / 1609.34
+            )  # Assuming length is in meters
+            df["VHT_hour_ff"] = df["length"] / df["freespeed"] * df["volume"] / 3600.0
 
             # Group by link (the first level of the index) and sum VHT across all hours
             # Ensure 'link' is the first level name for groupby
@@ -2916,10 +2918,14 @@ class NetworkVolumesByLink(OutputDataFrame):
                     columns=["vht"], index=pd.Index([], name=self.indexedOn)
                 )
 
-            df_agg = df.groupby(level="link").agg(vht=("VHT_hour", "sum"), vmt=("VMT_hour", "sum"), vht_ff=("VHT_hour_ff", "sum"))
-            df_agg['mph'] = df_agg['vmt'] / df_agg['vht']
-            df_agg['mph_ff'] = df_agg['vmt'] / df_agg['vht_ff']
-            df_agg['delay_h'] = df_agg['vht'] - df_agg['vht_ff']
+            df_agg = df.groupby(level="link").agg(
+                vht=("VHT_hour", "sum"),
+                vmt=("VMT_hour", "sum"),
+                vht_ff=("VHT_hour_ff", "sum"),
+            )
+            df_agg["mph"] = df_agg["vmt"] / df_agg["vht"]
+            df_agg["mph_ff"] = df_agg["vmt"] / df_agg["vht_ff"]
+            df_agg["delay_h"] = df_agg["vht"] - df_agg["vht_ff"]
 
             df_agg.index.name = self.indexedOn  # Set index name for the output DF
             print(
@@ -5905,7 +5911,7 @@ class CongestionInfoByYear(TAZBasedDataFrame, InfoByYear):
             geoIndex=pilatesRunInputDirectory.geometry.index,
             pilatesInputDict=pilatesInputDict,
             accessor=accessor,
-            columns=columns
+            columns=columns,
         )
 
         self.pilatesInputDict = pilatesInputDict

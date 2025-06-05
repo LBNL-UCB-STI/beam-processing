@@ -75,7 +75,7 @@ try:
         region=REGION,
         # Set collectEvents=False to avoid loading ALL events upfront, let OutputDataFrames handle it
         collectEvents=False,
-        file_format="parquet"
+        file_format="parquet",
     )
     print("PilatesRunInputDirectory initialized.")
 

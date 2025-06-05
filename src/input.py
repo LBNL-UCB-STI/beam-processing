@@ -131,10 +131,7 @@ class RawOutputFile:
                             f"File {self.filePath} seems to be an HTML error page."
                         )
                 elif self.inputDirectory.file_format == "parquet":
-                    if self.filePath.endswith(".parquet"):
-                        file = pd.read_parquet(self.filePath)
-                        self._file = file
-                    elif self.filePath.endswith(".csv") | self.filePath.endswith(
+                    if self.filePath.endswith(".csv") | self.filePath.endswith(
                         ".csv.gz"
                     ):
                         self._file = pd.read_csv(
@@ -142,6 +139,9 @@ class RawOutputFile:
                             index_col=self.index_col,
                             dtype=self.dtype,
                         )
+                    else:
+                        file = pd.read_parquet(self.filePath)
+                        self._file = file
 
             except (
                 FileNotFoundError,

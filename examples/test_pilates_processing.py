@@ -24,15 +24,15 @@ except ImportError as e:
 # Google Cloud Storage path for the Pilates run
 # !! NOTE: Ensure you have authenticated to Google Cloud Storage (e.g., `gcloud auth application-default login`)
 #    or have the GOOGLE_APPLICATION_CREDENTIALS environment variable set.
-PILATES_OUTPUT_PATH = "gs://beam-core-outputs/seattle-util-diff-20240715"
+PILATES_OUTPUT_PATH = "output/test-pilates-run"
 
 # Years present in the specified Pilates run
 # Based on checking the GCS path, years seem to be [2010, 2012, 2014, 2016, 2018, 2020]
-PILATES_YEARS = [2010, 2012, 2014, 2016, 2018, 2020, 2022]
+PILATES_YEARS = [2018]
 
 # Number of ActivitySim Light iterations (last iteration used for ASIM outputs)
 ASIM_LITE_ITERATIONS = (
-    2  # Assuming 2 iterations based on directory structure year-YYYY-iteration-1/2
+    0  # Assuming 2 iterations based on directory structure year-YYYY-iteration-1/2
 )
 
 # Number of BEAM iterations (last iteration used for BEAM outputs like linkstats)
@@ -40,7 +40,7 @@ ASIM_LITE_ITERATIONS = (
 BEAM_ITERATIONS = 0  # Assuming only iteration 0 is present
 
 # Region for geometry loading
-REGION = "Seattle"
+REGION = "SFBay"
 
 # Local directory to save processed outputs and cache
 LOCAL_OUTPUT_BASE_PATH = "./processed_outputs_test"
@@ -59,7 +59,7 @@ print(f"Set GCLOUD_PROJECT to {os.environ['GCLOUD_PROJECT']}")
 os.chdir("../")
 
 # Ensure the local output directory exists
-local_scenario_output_path = os.path.join(LOCAL_OUTPUT_BASE_PATH, "seattle_test_run")
+local_scenario_output_path = os.path.join(LOCAL_OUTPUT_BASE_PATH, "sfbay_test_run")
 os.makedirs(local_scenario_output_path, exist_ok=True)
 print(f"Local output directory: {local_scenario_output_path}")
 
@@ -75,6 +75,7 @@ try:
         region=REGION,
         # Set collectEvents=False to avoid loading ALL events upfront, let OutputDataFrames handle it
         collectEvents=False,
+        file_format="parquet"
     )
     print("PilatesRunInputDirectory initialized.")
 

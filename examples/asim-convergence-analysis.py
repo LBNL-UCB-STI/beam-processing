@@ -1,4 +1,6 @@
-from src import input, outputDataDirectory
+import src.output_container
+import src.pilates_output_container
+from src import input_directories, analysis
 import pandas as pd
 import geopandas as gpd
 import os
@@ -34,8 +36,8 @@ pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
     region="Seattle",
 )
 
-pilatesData_new = outputDataDirectory.PilatesOutputData(
-    outputDataDirectory.OutputDataDirectory("output/seattle-2010-base"),
+pilatesData_new = src.pilates_output_container.PilatesOutputData(
+    src.output_container.OutputDataDirectory("output/seattle-2010-base"),
     pilatesDirectory,
     region="Seattle",
 )
@@ -61,8 +63,8 @@ pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
     region="Seattle",
 )
 
-pilatesData_noplans = outputDataDirectory.PilatesOutputData(
-    outputDataDirectory.OutputDataDirectory("output/seattle-2010-noplans"),
+pilatesData_noplans = src.pilates_output_container.PilatesOutputData(
+    src.output_container.OutputDataDirectory("output/seattle-2010-noplans"),
     pilatesDirectory,
     region="Seattle",
 )
@@ -102,8 +104,8 @@ pilatesDirectory = outputDataDirectory.PilatesRunInputDirectory(
     region="Seattle",
 )
 
-pilatesData_newplans = outputDataDirectory.PilatesOutputData(
-    outputDataDirectory.OutputDataDirectory("output/seattle-2010-newpllans"),
+pilatesData_newplans = src.pilates_output_container.PilatesOutputData(
+    src.output_container.OutputDataDirectory("output/seattle-2010-newpllans"),
     pilatesDirectory,
     region="Seattle",
 )

@@ -1,12 +1,13 @@
-from src import input, outputDataDirectory
+from src import input_directories, analysis
 import pandas as pd
 import geopandas as gpd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import os
 
-from src.input import PilatesRunInputDirectory
-from src.outputDataDirectory import PilatesOutputData, OutputDataDirectory
+from src.input_directories import PilatesRunInputDirectory
+from src.output_container import OutputDataDirectory
+from src.pilates_output_container import PilatesOutputData
 
 os.chdir("../")
 

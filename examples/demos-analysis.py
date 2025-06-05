@@ -1,4 +1,4 @@
-from src import input, outputDataDirectory
+from src import input_directories, analysis
 import pandas as pd
 import geopandas as gpd
 import statsmodels.api as sm

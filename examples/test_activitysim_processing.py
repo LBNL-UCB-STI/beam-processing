@@ -2,8 +2,10 @@ import os
 import sys
 import traceback  # Import traceback for detailed error logging
 
-from src.input import SeattleGeometry, SfBayGeometry
-from src.outputDataFrame import ProcessedSkimsFile
+import src.activitysim.activitysim_output_container
+import src.output_container
+from src.geometry import SfBayGeometry, SeattleGeometry
+from src.activitysim.activitysim_processed_data_frame import ProcessedSkimsFile
 
 # Add the parent directory of src to the Python path
 # This assumes the script is run from the project root directory (beam-processing/)
@@ -15,7 +17,7 @@ if parent_dir not in sys.path:
 
 # Now you can import modules from src
 try:
-    from src import input, outputDataDirectory
+    from src import input_directories, analysis
 except ImportError as e:
     print(f"Error importing src modules: {e}")
     print("Please ensure the script is run from the beam-processing directory")
@@ -61,11 +63,11 @@ try:
     print("AsimRunInputDirectory initialized.")
 
     # Create the OutputDataDirectory object for saving processed outputs
-    outputDir = outputDataDirectory.OutputDataDirectory(local_scenario_output_path)
+    outputDir = src.output_container.OutputDataDirectory(local_scenario_output_path)
     print("OutputDataDirectory initialized.")
 
     # Create the Pilates Output Data object, which initializes various OutputDataFrame subclasses
-    pilatesData = outputDataDirectory.ActivitySimOutputData(
+    pilatesData = src.activitysim.activitysim_output_container.ActivitySimOutputData(
         outputDataDirectory=outputDir,
         activitySimRunInputDirectory=asimInputDirectory,
         geometry=SfBayGeometry(),

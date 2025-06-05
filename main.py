@@ -1,4 +1,6 @@
-from src import input, outputDataDirectory
+import src.output_container
+import src.pilates_output_container
+from src import input_directories, analysis
 import os
 
 os.environ["GCLOUD_PROJECT"] = "1010663794916"
@@ -59,8 +61,8 @@ pilatesInputDirectory = input.PilatesRunInputDirectory(
 )
 
 # Create the output data object for this Pilates run
-pilatesData = outputDataDirectory.PilatesOutputData(
-    outputDataDirectory.OutputDataDirectory(
+pilatesData = src.pilates_output_container.PilatesOutputData(
+    src.output_container.OutputDataDirectory(
         os.path.join(output_base_path, "pilates_run")
     ),
     pilatesInputDirectory,

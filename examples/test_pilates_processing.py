@@ -2,6 +2,10 @@ import os
 import sys
 import traceback  # Import traceback for detailed error logging
 
+import src.output_container
+import src.pilates_output_container
+from src.input_directories import PilatesRunInputDirectory
+
 # Add the parent directory of src to the Python path
 # This assumes the script is run from the project root directory (beam-processing/)
 # If running from a different directory, adjust the path accordingly.
@@ -12,7 +16,7 @@ if parent_dir not in sys.path:
 
 # Now you can import modules from src
 try:
-    from src import input, outputDataDirectory
+    from src import input_directories, analysis
 except ImportError as e:
     print(f"Error importing src modules: {e}")
     print("Please ensure the script is run from the beam-processing directory")
@@ -67,7 +71,7 @@ print(f"Local output directory: {local_scenario_output_path}")
 print("\n--- Initializing Pilates Input and Output Data ---")
 try:
     # Create the Pilates Input Directory object
-    pilatesInputDirectory = input.PilatesRunInputDirectory(
+    pilatesInputDirectory = PilatesRunInputDirectory(
         PILATES_OUTPUT_PATH,
         years=PILATES_YEARS,
         asimLiteIterations=ASIM_LITE_ITERATIONS,
@@ -80,11 +84,11 @@ try:
     print("PilatesRunInputDirectory initialized.")
 
     # Create the OutputDataDirectory object for saving processed outputs
-    outputDir = outputDataDirectory.OutputDataDirectory(local_scenario_output_path)
+    outputDir = src.output_container.OutputDataDirectory(local_scenario_output_path)
     print("OutputDataDirectory initialized.")
 
     # Create the Pilates Output Data object, which initializes various OutputDataFrame subclasses
-    pilatesData = outputDataDirectory.PilatesOutputData(
+    pilatesData = src.pilates_output_container.PilatesOutputData(
         outputDataDirectory=outputDir,
         pilatesRunInputDirectory=pilatesInputDirectory,
         region=REGION,  # Pass region again

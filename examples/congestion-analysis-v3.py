@@ -1,7 +1,9 @@
 import urllib
 
-from src import input, outputDataDirectory
-from src.input import SfBayGeometry
+import src.beam.beam_output_container
+import src.output_container
+from src import input_directories, analysis
+from src.geometry import SfBayGeometry
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -48,8 +50,8 @@ for folder, path in scenarioToLoc.items():
     beamDirectory = input.BeamRunInputDirectory(
         path, numberOfIterations=n, region="SFBay"
     )
-    beamData = outputDataDirectory.BeamOutputData(
-        outputDataDirectory.OutputDataDirectory("output/{0}".format(folder)),
+    beamData = src.beam.beam_output_container.BeamOutputData(
+        src.output_container.OutputDataDirectory("output/{0}".format(folder)),
         beamDirectory,
     )
     results[folder] = beamData.tazTrafficVolumes.dataFrame

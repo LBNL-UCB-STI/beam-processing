@@ -139,7 +139,7 @@ class NetworkFile(RawOutputFile):
         Initializes a Network instance.
 
         Parameters:
-            inputDirectory (InputDirectory): The output directory where the file will be stored.
+            inputDirectory (OutputDirectory): The output directory where the file will be stored.
             :param geometry:
         """
         relativePath = "network.csv.gz"
@@ -240,5 +240,3 @@ class ScoreStatsFile(RawOutputFile):
                     print("Giving up!")
                     return None
         return self._file
-
-

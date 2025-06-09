@@ -56,8 +56,9 @@ class ProcessedDataFrame(ABC):
             calculated_hash + ".parquet",
         )
         self.indexedOn = None
-        # Pass remaining args/kwargs up the MRO chain
-        super().__init__(*args, **kwargs)
+        # ProcessedDataFrame is the base class before object in this hierarchy,
+        # so it should not pass args/kwargs to super().
+        super().__init__()
 
     def hash(self):
         """
@@ -126,7 +127,16 @@ class ProcessedDataFrame(ABC):
         try:
             # Ensure temporary directory exists before writing
             os.makedirs(TMP_DIR, exist_ok=True)
+            # Convert index names to strings before writing to parquet
+            original_index_names = obj.index.names
+            if original_index_names is not None:
+                obj.index.names = [str(name) for name in original_index_names]
+
             obj.to_parquet(self._diskLocation, engine="fastparquet")
+
+            # Restore original index names after writing
+            if original_index_names is not None:
+                obj.index.names = original_index_names
         except Exception as e:
             print(
                 f"Error writing {self.__class__.__name__} to {self._diskLocation}: {e}"
@@ -331,5 +341,3 @@ class ProcessedDataFrame(ABC):
         mapping: Optional[Dict[str, str]],
     ) -> pd.DataFrame:
         raise NotImplementedError("This class does not have process defined")
-
-

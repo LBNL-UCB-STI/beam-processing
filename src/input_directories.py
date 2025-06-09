@@ -1,3 +1,4 @@
+import os
 from typing import Iterable
 
 # Use requests for more flexible HTTP calls (e.g., HEAD)
@@ -33,7 +34,7 @@ class PilatesRunOutputDirectory(OutputDirectory):
         if region == "SFBay":
             self.geometry = SfBayGeometry(
                 otherFiles={
-                    "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
+                    os.path.join(os.path.dirname(__file__), '..', "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv"): "zoneid"
                 }
             )
         elif region == "Seattle":
@@ -49,8 +50,10 @@ class PilatesRunOutputDirectory(OutputDirectory):
                     relPath.append("output")
                 relPath.append("year-{0}-iteration-{1}".format(year, asimLiteIteration))
                 print("Loading year {0} it {1}".format(year, asimLiteIteration))
-                self.asimRuns[(year, asimLiteIteration)] = ActivitySimRunOutputDirectory(
-                    self.append(relPath), self.geometry, file_format
+                self.asimRuns[(year, asimLiteIteration)] = (
+                    ActivitySimRunOutputDirectory(
+                        self.append(relPath), self.geometry, file_format
+                    )
                 )
                 relPath = ["beam"]
                 if not self.isLink:

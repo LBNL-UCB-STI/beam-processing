@@ -1,3 +1,4 @@
+import os
 from typing import Dict, Tuple
 from urllib.error import HTTPError
 
@@ -15,8 +16,7 @@ from src.activitysim.activitysim_multiyear_processed_data_frame import (
     TripModeCountByIteration,
     TourModeCountByIteration,
     TripModeCountByYear,
-    TourModeCountByYear,
-    TripModeCountByCountyByYear,
+    TourModeCountByYear
 )
 from src.activitysim.activitysim_processed_data_frame import ProcessedSkimsFile
 from src.beam.beam_multiyear_processed_data_frame import (
@@ -58,7 +58,7 @@ class PilatesOutputData(ModelOutputData):
         if region == "SFBay":
             self.geometry = SfBayGeometry(
                 otherFiles={
-                    "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv": "zoneid"
+                    os.path.join(os.path.dirname(__file__), '..', "geoms/Plan_Bay_Area_2040_Forecast__Land_Use_and_Transportation.csv"): "zoneid"
                 }
             )
         elif region == "Austin":
@@ -87,7 +87,7 @@ class PilatesOutputData(ModelOutputData):
         for (yr, it), directory in pilatesRunInputDirectory.beamRuns.items():
             try:
                 self.beamRuns[(yr, it)] = BeamOutputData(
-                    outputDataDirectory, directory, collectEvents
+                    outputDataDirectory, directory, collectEvents # Pass pilatesInputDict
                 )
             except HTTPError:
                 print("Skipping BEAM year {0} iteration {1}".format(yr, it))
@@ -105,39 +105,40 @@ class PilatesOutputData(ModelOutputData):
         self.mandatoryLocationsByTazByYear = MandatoryLocationByTazByYear(
             self.outputDataDirectory,
             self.pilatesRunInputDirectory,
-            self.asimRuns,  # Pass the dictionary of ASIM runs
-            self.geometry,
+            pilatesInputDict=self.asimRuns,  # Pass the dictionary of ASIM runs as keyword arg
+            geometry=self.geometry, # Pass geometry as keyword for clarity
         )
 
         self.tripPMTPerYear = TripPMTByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.asimRuns
         )
         self.tripPMTByPrimaryPurposePerYear = TripPMTByPrimaryPurposeByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.asimRuns
         )
         self.tripPMTByCountyPerYear = TripPMTByCountyByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory,
+            self.pilatesRunInputDirectory,
+            pilatesInputDict=self.asimRuns, # Pass the dictionary of ASIM runs as keyword arg
+            geometry=self.geometry, # Pass geometry as keyword for TAZBasedDataFrame
         )
         self.tripModeCountPerYear = TripModeCountByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.asimRuns
         )
         self.tourModeCountPerYear = TourModeCountByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.asimRuns
         )
         self.tripModeCountPerIteration = TripModeCountByIteration(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.asimRuns
         )
         self.tourModeCountPerIteration = TourModeCountByIteration(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.asimRuns
         )
-        self.tripModeCountByCountyPerYear = TripModeCountByCountyByYear(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.asimRuns
-        )
+
         self.replanningEventReasonPerIteration = ReplanningEventReasonByIteration(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.beamRuns
         )
         self.scoreStatsByIteration = ScoreStatsByIteration(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
+            self.outputDataDirectory, self.pilatesRunInputDirectory, pilatesInputDict=self.beamRuns
         )
         self.modeVMTPerYear = ModeVMTByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
@@ -149,9 +150,6 @@ class PilatesOutputData(ModelOutputData):
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.modePMTPerIteration = ModePMTByIteration(
-            self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
-        )
-        self.congestionInfoByYear = CongestionInfoByYear(
             self.outputDataDirectory, self.pilatesRunInputDirectory, self.beamRuns
         )
         self.congestionInfoByIteration = CongestionInfoByIteration(

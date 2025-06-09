@@ -14,6 +14,8 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+os.chdir("/Users/zaneedell/git/beam-processing/examples")
+
 # Now you can import modules from src
 try:
     from src import input_directories, analysis

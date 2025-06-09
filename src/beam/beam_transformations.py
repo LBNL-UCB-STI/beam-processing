@@ -1,3 +1,5 @@
+from typing import Optional
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -90,10 +92,7 @@ def fixPathTraversals(PTs: pd.DataFrame):
     PTs.loc[PTs["secondaryFuelType"] == "gasoline", "gallonsGasoline"] += (
         PTs.loc[PTs["secondaryFuelType"] == "gasoline", "secondaryFuel"] * 8.3141841e-9
     )
-    PTs.drop(
-        columns=[
-            "numPassengers",
-            "length",
+    toDrop = [
             "type",
             "primaryFuelLevel",
             "secondaryFuelLevel",
@@ -102,7 +101,9 @@ def fixPathTraversals(PTs: pd.DataFrame):
             "capacity",
             "seatingCapacity",
             "toStopIndex",
-        ],
+        ]
+    PTs.drop(
+        columns=[col for col in toDrop if col in PTs.columns],
         inplace=True,
     )
     return PTs.convert_dtypes()
@@ -752,14 +753,12 @@ def labelNetworkWithTaz(
 
 
 def mergeLinkstatsWithNetwork(
-    linkStats: pd.DataFrame, network: pd.DataFrame, index: str
+    linkStats: pd.DataFrame, network: pd.DataFrame, index: Optional[str] = None
 ):
-    linkStats["VMT"] = linkStats["volume"] * linkStats["length"] / 1609.34
-    linkStats["VHT"] = linkStats["volume"] * linkStats["traveltime"] / 3600.0
-    out = linkStats.merge(network, left_on="link", right_index=True)
-    return out[
-        list(linkStats.columns)
-        + [
+    out = network.merge(linkStats, right_on="link", left_index=True)
+    out["VMT"] = out["volume"] * out["linkLength"] / 1609.34
+    out["VHT"] = out["volume"] * out["traveltime"] / 3600.0
+    cols =  [
             "linkLength",
             "linkFreeSpeed",
             "linkCapacity",
@@ -767,6 +766,10 @@ def mergeLinkstatsWithNetwork(
             "linkModes",
             "attributeOrigId",
             "attributeOrigType",
-            index,
         ]
+    if index is not None:
+        cols.append(index)
+    return out[
+        list(linkStats.columns)
+        + cols
     ]

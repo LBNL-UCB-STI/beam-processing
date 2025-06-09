@@ -8,7 +8,6 @@ from src.activitysim.activitysim_input_directory import ActivitySimRunOutputDire
 from src.beam.beam_input_directory import BeamRunOutputDirectory
 from src.input_base import gcs_blob_exists
 from src.output_container import ModelOutputData, OutputDataDirectory
-from src.beam.beam_multiyear_processed_data_frame import NetworkVolumesByLinkByIteration
 from src.beam.beam_processed_data_frame import (
     PathTraversalEvents,
     PersonTrips,
@@ -27,9 +26,12 @@ from src.beam.beam_processed_data_frame import (
     LabeledNetwork,
     NetworkVolumesByLink,
     LabeledLinkStatsFile,
-    TAZTrafficVolumes,
+    TAZTrafficVolumes, NetworkVolumesByLinkByIteration,
 )
-from src.beam.beam_transformations import assignTripIdToEvents, mergeWithTripsAndAggregate
+from src.beam.beam_transformations import (
+    assignTripIdToEvents,
+    mergeWithTripsAndAggregate,
+)
 
 
 class BeamOutputData(ModelOutputData):
@@ -51,6 +53,7 @@ class BeamOutputData(ModelOutputData):
         self,
         outputDataDirectory: OutputDataDirectory,
         beamRunInputDirectory: BeamRunOutputDirectory,
+        pilatesInputDict: dict,
         collectEvents=False,
     ):
         """
@@ -64,6 +67,7 @@ class BeamOutputData(ModelOutputData):
         super().__init__(outputDataDirectory, beamRunInputDirectory)
         assert isinstance(self.inputDirectory, BeamRunOutputDirectory)
         self.outputDataDirectory = outputDataDirectory
+        self.pilatesInputDict = pilatesInputDict
         log_file_path = beamRunInputDirectory.append("beamLog.out")
         if self.remoteResults and log_file_path.startswith("gs://"):
             print(f"Checking status for GCS file: {log_file_path}")
@@ -168,8 +172,6 @@ class BeamOutputData(ModelOutputData):
         self.networkVolumesByLinkByIteration = NetworkVolumesByLinkByIteration(
             self.outputDataDirectory,
             self.inputDirectory,
-            self.labeledNetwork,
-            list(range(self.inputDirectory.numberOfIterations + 1)),
         )
 
     # Add a method to run the aggregated trip processing (formerly part of PilatesOutputData.runInexus)

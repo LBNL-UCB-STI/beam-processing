@@ -67,6 +67,7 @@ class TAZBasedDataFrame(ProcessedDataFrame):
         inputDirectory: OutputDirectory,  # Expected by OutputDataFrame
         geometry: Geometry,
         geoIndex: Optional[str] = "TAZ",
+        pilatesInputDict: Optional[Dict[int, Dict[int, OutputDirectory]]] = None, # Make optional for PILATES aggregation
         *args,
         **kwargs,  # Accepts args for OutputDataFrame and other parents in MI
     ):
@@ -74,8 +75,11 @@ class TAZBasedDataFrame(ProcessedDataFrame):
         self.geometry = geometry
         self.geoIndex = geoIndex
 
-        super().__init__(outputDataDirectory, inputDirectory, *args, **kwargs)
-
+        # Pass pilatesInputDict to the superclass if provided
+        if pilatesInputDict is not None:
+             super().__init__(outputDataDirectory, inputDirectory, pilatesInputDict=pilatesInputDict, *args, **kwargs)
+        else:
+             super().__init__(outputDataDirectory, inputDirectory, pilatesInputDict=pilatesInputDict, *args, **kwargs)
 
     def countsInColumn(
         self, df: pd.DataFrame, column: str, nonNegative=True
@@ -91,7 +95,6 @@ class TAZBasedDataFrame(ProcessedDataFrame):
     def setGeometry(self, geom: Geometry):
         """Sets the geometry object for this DataFrame."""
         self.geometry = geom
-
 
     def process(
         self,

@@ -1,4 +1,5 @@
 from typing import Optional, Dict
+import os
 
 import geopandas as gpd
 import pandas as pd
@@ -42,7 +43,7 @@ class SfBayGeometry(Geometry):
         self.crs = "epsg:26910"
         self.unit = "TAZ"
         self.index = "taz1454"
-        self._path = "geoms/sfbay-tazs-epsg-26910.shp"
+        self._path = os.path.join(os.path.dirname(__file__), '..', "geoms/sfbay-tazs-epsg-26910.shp")
         self._otherFiles = otherFiles
 
         self.load()

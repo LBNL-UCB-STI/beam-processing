@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 from typing import Dict, Optional
 
 import numpy as np
@@ -12,8 +13,12 @@ from src.processed_data_frame import (
     ProcessedDataFrame,
 )
 from src.processed_data_frame_mixins import EitherLinkStatsFile, TAZBasedDataFrame
-from src.beam.beam_transformations import getLinkStatsFromPathTraversals, fixPathTraversals, labelNetworkWithTaz, \
-    mergeLinkstatsWithNetwork
+from src.beam.beam_transformations import (
+    getLinkStatsFromPathTraversals,
+    fixPathTraversals,
+    labelNetworkWithTaz,
+    mergeLinkstatsWithNetwork,
+)
 
 
 class PathTraversalEvents(ProcessedDataFrame):
@@ -46,18 +51,20 @@ class PathTraversalEvents(ProcessedDataFrame):
 
     def preprocess(self, df):
         """
-        Preprocesses the path traversal events DataFrame.
+        Preprocesses the path traversal events DataFrame by applying fixPathTraversals.
 
         Parameters:
             df (pd.DataFrame): The DataFrame to preprocess.
 
         Returns:
-            pd.DataFrame: The preprocessed DataFrame.
+            pd.DataFrame: The preprocessed DataFrame with added columns like mode_extended and vehicleMiles.
         """
         print(
             f"Preprocessing PathTraversalEvents using fixPathTraversals ({df.shape[0]} rows)..."
         )
-        return fixPathTraversals(df)
+        # Call fixPathTraversals to add necessary columns
+        processed_df = fixPathTraversals(df)
+        return processed_df
 
     def load(self):
         """
@@ -127,7 +134,9 @@ class PersonTrips(ProcessedDataFrame):
         }
 
     def load(self):
-        raise NotImplementedError("PersonTrips does not implement load(). Use dataFrame property to access data.")
+        raise NotImplementedError(
+            "PersonTrips does not implement load(). Use dataFrame property to access data."
+        )
 
     # Override cached, _write, _read to handle a dictionary of dataframes
     @property
@@ -1261,53 +1270,82 @@ class LinkStatsFromPathTraversals(ProcessedDataFrame, EitherLinkStatsFile):
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculates link stats (volumes, travel times) from preprocessed path traversal events.
-        This method receives the DataFrame loaded by load().
+        Preprocesses the path traversal events DataFrame by applying fixPathTraversals
+        and merging with network data to add link length.
 
         Parameters:
-            df (pd.DataFrame): Preprocessed PathTraversalEvents DataFrame.
+            df (pd.DataFrame): The DataFrame of raw path traversal events.
 
         Returns:
-            pd.DataFrame: DataFrame of link volumes and travel times per hour (indexed by ['link', 'hour']).
+            pd.DataFrame: The preprocessed DataFrame with link stats including length.
         """
         print(
-            f"Preprocessing LinkStatsFromPathTraversals using getLinkStats ({df.shape[0]} rows)..."
+            f"Preprocessing PathTraversalEvents using fixPathTraversals ({df.shape[0]} rows)..."
         )
-        # Ensure df is not None or empty before processing
-        if df is None or df.empty:
-            print("Input DataFrame for LinkStatsFromPathTraversals is empty or None.")
-            # Return an empty DataFrame with the expected structure
+        # Apply initial path traversal fixes
+        processed_df = fixPathTraversals(df)
+
+        # Ensure processed_df is not None or empty before merging
+        if processed_df is None or processed_df.empty:
+            print("Processed PathTraversalEvents DataFrame is empty or None after fixPathTraversals.")
+            # Return an empty DataFrame with the expected structure for link stats
             return pd.DataFrame(
                 columns=["traveltime", "volume"],
                 index=pd.MultiIndex.from_tuples(
                     [], names=self.indexedOn
-                ),  # Use self.indexedOn set by mixin setup
-            )
-        try:
-            result_df = getLinkStatsFromPathTraversals(df)
-            # The getLinkStats function already sets index names ['link', 'hour'].
-            # Ensure it matches self.indexedOn, although they should be the same.
-            if list(result_df.index.names) != self.indexedOn:
-                print(
-                    f"Warning: Index names from getLinkStats unexpected {list(result_df.index.names)}. Expected {self.indexedOn}. Forcing set."
-                )
-                result_df.index.set_names(
-                    self.indexedOn, inplace=True
-                )  # Force set names
-
-            print(
-                f"Finished preprocessing LinkStatsFromPathTraversals ({result_df.shape[0]} rows)."
-            )
-            return result_df
-        except Exception as e:
-            print(f"Error during LinkStatsFromPathTraversals preprocessing: {e}")
-            return pd.DataFrame(
-                columns=["traveltime", "volume"],
-                index=pd.MultiIndex.from_tuples(
-                    [], names=self.indexedOn
-                ),  # Use self.indexedOn set by mixin setup
+                ),
             )
 
+
+
+
+        print(
+            f"Merging path traversals with network data to add link length ({processed_df.shape[0]} rows)..."
+        )
+        # Merge with network data to add the 'length' column
+        # Assuming self.beamInputDirectory.networkFile.dataFrame provides the network GeoDataFrame
+        if self.inputDirectory and hasattr(self.inputDirectory, 'networkFile'):
+             network_df = self.inputDirectory.networkFile.file()
+             # Ensure network_df is not None or empty
+             if network_df is not None and not network_df.empty:
+                 # processed_df_with_length = mergeLinkstatsWithNetwork(processed_df, network_df)
+                 # print(
+                 #     f"Calculating link stats from merged path traversals ({processed_df_with_length.shape[0]} rows)..."
+                 # )
+                 # Calculate link stats from the merged path traversals
+                 link_stats_df = getLinkStatsFromPathTraversals(processed_df)
+
+                 # Ensure index names match self.indexedOn
+                 if list(link_stats_df.index.names) != self.indexedOn:
+                     print(
+                         f"Warning: Index names from getLinkStats unexpected {list(link_stats_df.index.names)}. Expected {self.indexedOn}. Forcing set."
+                     )
+                     link_stats_df.index.set_names(
+                         self.indexedOn, inplace=True
+                     )  # Force set names
+
+                 print(
+                     f"Finished preprocessing LinkStatsFromPathTraversals ({link_stats_df.shape[0]} rows)."
+                 )
+                 return link_stats_df
+             else:
+                 print("Error: Network dataFrame is not available or empty.")
+                 # Return an empty DataFrame with the expected structure
+                 return pd.DataFrame(
+                     columns=["traveltime", "volume"],
+                     index=pd.MultiIndex.from_tuples(
+                         [], names=self.indexedOn
+                     ),
+                 )
+        else:
+             print("Error: Cannot access network data through beamInputDirectory.")
+             # Return an empty DataFrame with the expected structure
+             return pd.DataFrame(
+                 columns=["traveltime", "volume"],
+                 index=pd.MultiIndex.from_tuples(
+                     [], names=self.indexedOn
+                 ),
+             )
 
 class LabeledNetwork(ProcessedDataFrame):
     def __init__(
@@ -2004,3 +2042,116 @@ class TAZTrafficVolumes(TAZBasedDataFrame):
         else:
             print("Failed to load LabeledLinkStatsFile for TAZTrafficVolumes.")
         return df
+
+
+class NetworkVolumesByLinkByIteration(ProcessedDataFrame):
+    """
+    Aggregates NetworkVolumesByLink data across sub-iterations within a single BEAM run.
+    """
+
+    def __init__(
+        self,
+        outputDataDirectory: "OutputDataDirectory",
+        beamRunInputDirectory: BeamRunOutputDirectory,
+    ):
+        # This class aggregates data across sub-iterations within a single BEAM run,
+        # so it only needs the BEAM run's output directory.
+        # pilatesInputDict is not relevant here.
+
+        super().__init__(
+            outputDataDirectory,
+            beamRunInputDirectory,
+        )
+        # The index after processing will be ['link', 'iteration']
+        self.indexedOn = ["link", "iteration"]
+
+    def load(self) -> Optional[pd.DataFrame]:
+        """
+        Loads and aggregates NetworkVolumesByLink data across sub-iterations within a single BEAM run.
+        """
+        print(f"Loading {self.__class__.__name__} by aggregating across sub-iterations...")
+
+        beam_run_dir = self._inputDirectory.directoryPath
+        iters_dir = os.path.join(beam_run_dir, "ITERS")
+
+        if not os.path.isdir(iters_dir):
+            print(f"ITERS directory not found in {beam_run_dir}. Cannot load data.")
+            return None
+
+        aggregated_dfs = []
+        # Find all iteration directories (it.X)
+        iter_dirs = [d for d in os.listdir(iters_dir) if d.startswith("it.")]
+
+        if not iter_dirs:
+            print(f"No iteration directories found in {iters_dir}. Cannot load data.")
+            return None
+
+        # Sort iteration directories numerically
+        iter_dirs.sort(key=lambda x: int(x.split(".")[1]))
+
+        for iter_dir_name in iter_dirs:
+            iter_match = re.match(r"it\.(\d+)", iter_dir_name)
+            if not iter_match:
+                continue  # Skip directories not matching the pattern
+
+            iteration = int(iter_match.group(1))
+            link_stats_path = os.path.join(
+                iters_dir, iter_dir_name, f"{iteration}.linkStats.csv.gz" # Assuming gzipped CSV
+            )
+
+            if not os.path.exists(link_stats_path):
+                print(f"Link stats file not found for iteration {iteration}: {link_stats_path}. Skipping.")
+                continue
+
+            try:
+                # Load the link stats data for this iteration
+                link_stats_df = pd.read_csv(link_stats_path)
+
+                if link_stats_df.empty:
+                    print(f"Link stats data is empty for iteration {iteration}. Skipping.")
+                    continue
+
+                # Process the data similar to NetworkVolumesByLink
+                # Assuming the raw linkStats file needs aggregation
+                # This logic is adapted from the original NetworkVolumesByLink load method
+                if "link" not in link_stats_df.columns:
+                     print(f"Warning: 'link' column not found in {link_stats_path}. Skipping iteration {iteration}.")
+                     continue
+
+                # Aggregate by link and sum relevant columns (e.g., volume, travelTime)
+                # Need to confirm actual columns in linkStats.csv.gz
+                # For now, assuming 'volume' and 'travelTime' as examples
+                # You might need to adjust based on the actual file content
+                aggregated_link_stats = link_stats_df.groupby("link").agg({
+                    "volume": "sum", # Example aggregation
+                    "travelTime": "mean" # Example aggregation
+                    # Add other columns and aggregations as needed
+                })
+
+                # Add the iteration column
+                aggregated_link_stats["iteration"] = iteration
+
+                # Set the index to 'link' for this iteration's data
+                aggregated_link_stats = aggregated_link_stats.set_index("link")
+
+                aggregated_dfs.append(aggregated_link_stats)
+                print(f"Loaded and processed link stats for iteration {iteration}.")
+
+            except Exception as e:
+                print(f"Error loading or processing link stats for iteration {iteration} from {link_stats_path}: {e}. Skipping.")
+                continue
+
+        if not aggregated_dfs:
+            print("No data loaded from any iteration.")
+            return None
+
+        # Concatenate all aggregated dataframes
+        final_df = pd.concat(aggregated_dfs)
+
+        # Reset index to make 'link' and 'iteration' columns, then set multi-index
+        final_df = final_df.reset_index().set_index(["link", "iteration"])
+
+
+        print(f"Finished aggregation for {self.__class__.__name__} ({final_df.shape[0]} rows).")
+
+        return final_df

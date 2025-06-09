@@ -7,7 +7,7 @@ from src.input_base import OutputDirectory
 from src.processed_data_frame import ProcessedDataFrame
 
 
-class InfoByYear(ProcessedDataFrame):
+class InfoByYear:
     """
     Base class for output dataframes that aggregate data across years,
     typically using the last iteration for each year.
@@ -25,52 +25,23 @@ class InfoByYear(ProcessedDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: "OutputDataDirectory",  # Positional for OutputDataFrame
-        inputDirectory: OutputDirectory,  # Positional for OutputDataFrame (expected to be PilatesRunInputDirectory)
         pilatesInputDict: Dict[Tuple[int, int], "ModelOutputData"],
         accessor: Callable[["ModelOutputData"], Optional[pd.DataFrame]],
-        columns: List[str],  # Expected index names
-        *args,
-        **kwargs,
+        columns: List[str],
     ):
-        last_iteration_per_year = {}
+        self.pilatesInputDict = pilatesInputDict
+        self.__accessor = accessor
+        self.__columns = columns
+        self.__lastIterationPerYear = {}
         if pilatesInputDict:
             for yr, it in pilatesInputDict.keys():
                 if (
-                    yr not in last_iteration_per_year
-                    or it >= last_iteration_per_year[yr]
+                    yr not in self.__lastIterationPerYear
+                    or it >= self.__lastIterationPerYear[yr]
                 ):
-                    last_iteration_per_year[yr] = it
-        self.__lastIterationPerYear = last_iteration_per_year  # Store for load method
+                    self.__lastIterationPerYear[yr] = it
 
-        # Calculate hash key based on input directory and last iteration per year
-        m = hashlib.md5()
-        input_path_str = str(getattr(inputDirectory, "directoryPath", ""))
-        m.update(input_path_str.encode())
-        m.update(self.__class__.__name__.encode())
-        m.update(
-            str(sorted(self.__lastIterationPerYear.items())).encode()
-        )  # Include years and their LAST iteration
-        override_hash = m.hexdigest()
-
-        # Pass common arguments (outputDataDirectory, inputDirectory) and the
-        # calculated hash_key to the OutputDataFrame parent, along with any
-        # additional *args and **kwargs.
-        super().__init__(
-            outputDataDirectory,  # Positional argument for OutputDataFrame
-            inputDirectory,  # Positional argument for OutputDataFrame
-            hash_key=override_hash,  # Keyword-only argument for OutputDataFrame
-            *args,
-            **kwargs,
-        )
-
-        # Store InfoByYear specific attributes after calling super()
-        self.pilatesInputDict = pilatesInputDict
-        self.__accessor = accessor
-        self.__columns = columns  # Store expected index names from accessor's DF
-
-
-    def load(self):
+    def run_aggregation(self):
         """
         Loads data from the last available iteration for each year using the accessor.
         Concatenates the results.
@@ -81,70 +52,34 @@ class InfoByYear(ProcessedDataFrame):
         )
         data_frames = {}
 
-        # Iterate through years and their determined last iteration, sorted by year
-        # Use the stored lastIterationPerYear dictionary
         if self.__lastIterationPerYear:
             for yr in sorted(self.__lastIterationPerYear.keys()):
+                data_frames[yr] = pd.DataFrame  # Init empty dataframe
                 it = self.__lastIterationPerYear[yr]
-                print(f" - Attempting to load year {yr}, last iteration {it}")
-                # Try to load the data, iterate backward through iterations if the last one fails
-                current_it = it
-                df = None
-
-                iterations_for_year = sorted(
-                    [i for (y, i) in self.pilatesInputDict.keys() if y == yr],
-                    reverse=True,
-                )
-
-                # Find the index of the target 'it' in the sorted iterations for the year
-                try:
-                    start_idx = iterations_for_year.index(it)
-                except ValueError:
-                    print(
-                        f"Warning: Last iteration {it} for year {yr} not found in pilatesInputDict keys. Skipping year."
-                    )
-                    continue  # Skip this year if the last iteration is not in the dictionary
-
-                for i in range(start_idx, len(iterations_for_year)):
-                    current_it = iterations_for_year[i]
-                    print(f" - Attempting to load year {yr}, iteration {current_it}")
-                    try:
-                        if (yr, current_it) in self.pilatesInputDict:
-                            data_instance = self.pilatesInputDict[(yr, current_it)]
-
-                            # Access the data using the provided accessor
-                            df = self.__accessor(data_instance)
-
-                            if df is not None and not df.empty:
-                                print(
-                                    f" - Successfully loaded year {yr}, iteration {current_it} ({df.shape[0]} rows)"
-                                )
-                                data_frames[yr] = df
-                                break  # Found data for this year, move to next year
-
-                            else:
-                                print(
-                                    f" - Accessor returned no data for year {yr}, iteration {current_it}. Trying previous iteration."
-                                )
-                        else:
-                            # This case should be handled by iterating over iterations_for_year
-                            print(
-                                f" - Run data for year {yr}, iteration {current_it} not found unexpectedly. Skipping."
-                            )  # Should not happen within sorted iterations_for_year
-
-                    except Exception as e:
+                for current_it in range(yr, -2, -1):
+                    print(f" - Attempting to load year {yr}, last iteration {it}")
+                    # Try to load the data, iterate backward through iterations if the last one fails
+                    if (yr, it) not in self.pilatesInputDict:
                         print(
-                            f" - Error loading data for year {yr}, iteration {current_it}: {e}. Trying previous iteration."
+                            f" - No data found for year {yr}, iteration {current_it}. Trying previous iterations."
                         )
-                        raise e
-                        # Optionally log the error more verbosely
+                        break
+                    data_instance = self.pilatesInputDict[(yr, it)]
 
-            if (
-                yr not in data_frames
-            ):  # Check if data was successfully loaded for the year after trying iterations
-                print(
-                    f" - Could not load data for year {yr} after trying all iterations down to {iterations_for_year[-1]}."
-                )
+                    # Access the data using the provided accessor
+                    df = self.__accessor(data_instance, yr, it)
+                    if not df is None:
+                        if not df.empty:
+                            print(
+                                f" - Successfully loaded year {yr}, iteration {current_it} ({df.shape[0]} rows)"
+                            )
+                            data_frames[yr] = df
+                            self.__lastIterationPerYear[yr] = current_it
+                            break
+                    if current_it < 0:
+                        print(
+                            f" - Could not load data for year {yr} after trying all iterations down to {current_it}."
+                        )
 
         if not data_frames:
             print(f"No data found across any year for {self.__class__.__name__}.")
@@ -168,8 +103,6 @@ class InfoByYear(ProcessedDataFrame):
         if not valid_index_names and isinstance(
             next(iter(data_frames.values())), pd.Series
         ):
-            # If Series, convert to DataFrame, column name defaults to Series name
-            # The index name becomes None. We need to use the Series name for the concat index.
             series_name = next(iter(data_frames.values())).name
             if series_name is None:
                 series_name = "value"  # Default name if series has no name
@@ -195,24 +128,14 @@ class InfoByYear(ProcessedDataFrame):
 
         combined_df = pd.concat(data_frames, axis=0)  # Concatenate rows
 
-        # Set the indexedOn attribute based on the concatenated DataFrame's index names
-        # Ensure index has names before converting to list
-        self.indexedOn = (
-            list(combined_df.index.names) if combined_df.index.names else []
-        )
-
         print(
             f"Finished loading {self.__class__.__name__}. Result shape: {combined_df.shape}"
         )
 
         return combined_df
 
-    def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Base class preprocess does nothing by default
-        return df
 
-
-class InfoByIteration(ProcessedDataFrame):
+class InfoByIteration:
     """
 
     Base class for output dataframes that aggregate data across iterations.
@@ -230,38 +153,23 @@ class InfoByIteration(ProcessedDataFrame):
 
     def __init__(
         self,
-        outputDataDirectory: "OutputDataDirectory",  # Positional for OutputDataFrame
-        inputDirectory: OutputDirectory,  # Positional for OutputDataFrame (expected to be PilatesRunInputDirectory)
         pilatesInputDict: Dict[Tuple[int, int], "ModelOutputData"],
         accessor: Callable[["ModelOutputData"], Optional[pd.DataFrame]],
         columns: List[str],
-        *args,
-        **kwargs,
     ):
-
-        # Calculate hash key based on input directory and all iterations
-        m = hashlib.md5()
-        input_path_str = str(getattr(inputDirectory, "directoryPath", ""))
-        m.update(input_path_str.encode())
-        m.update(self.__class__.__name__.encode())
-        m.update(
-            str(sorted(pilatesInputDict.keys())).encode()
-        )  # Include all years/iters
-        override_hash = m.hexdigest()
-
-        super().__init__(
-            outputDataDirectory,  # Positional argument for OutputDataFrame
-            inputDirectory,  # Positional argument for OutputDataFrame
-            hash_key=override_hash,  # Keyword-only argument for OutputDataFrame
-            *args,
-            **kwargs,
-        )
-
         self.pilatesInputDict = pilatesInputDict
         self.__accessor = accessor
-        self.__columns = columns  # Store expected index names
+        self.__columns = columns
+        self.__lastIterationPerYear = {}
+        if pilatesInputDict:
+            for yr, it in pilatesInputDict.keys():
+                if (
+                    yr not in self.__lastIterationPerYear
+                    or it >= self.__lastIterationPerYear[yr]
+                ):
+                    self.__lastIterationPerYear[yr] = it
 
-    def load(self):
+    def run_aggregation(self):
         """
         Loads data from all available iterations for each year using the accessor.
         Concatenates the results.
@@ -273,8 +181,8 @@ class InfoByIteration(ProcessedDataFrame):
             for yr, it in sorted(self.pilatesInputDict.keys()):
                 try:
                     data_instance = self.pilatesInputDict[(yr, it)]
-                    # Access the data using the provided accessor
-                    df = self.__accessor(data_instance)
+                    # Pass year and iteration to the accessor
+                    df = self.__accessor(data_instance, yr, it)
                     if df is not None and not df.empty:
                         data_frames[(yr, it)] = df
                         print(
@@ -284,7 +192,6 @@ class InfoByIteration(ProcessedDataFrame):
                         print(f" - No data for year {yr}, iteration {it}")
                 except Exception as e:
                     print(f" - Error loading data for year {yr}, iteration {it}: {e}")
-                    # Optionally log the error more verbosely
 
         if not data_frames:
             print(f"No data found across any iteration for {self.__class__.__name__}.")
@@ -329,14 +236,8 @@ class InfoByIteration(ProcessedDataFrame):
         combined_df = pd.concat(
             data_frames, names=concat_names, axis=0  # Concatenate rows
         )
-        self.indexedOn = (
-            list(combined_df.index.names) if combined_df.index.names else []
-        )
         print(
             f"Finished loading {self.__class__.__name__}. Result shape: {combined_df.shape}"
         )
 
         return combined_df
-
-    def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df

@@ -753,6 +753,7 @@ class PassengerMilesByVehicleAndMode(ProcessedDataFrame):
         print("Loading and aggregating PassengerMilesByVehicleAndMode...")
         # Access the preprocessed dataFrame directly from the source
         PTs = self.pathTraversalEvents.dataFrame.copy()
+        self.pathTraversalEvents.clearMemory()
 
         # Ensure df is not None or empty before processing
         if PTs is None or PTs.empty:

@@ -32,23 +32,25 @@ class TripPMTByYear(AggregatedProcessedDataFrameBase):
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration
+        as required by the base aggregator classes (InfoByYear/InfoByIteration).
         """
         def trip_pmt_by_year_accessor(
-            outputData: "ActivitySimRunOutputData",
+            outputData: "ActivitySimRunOutputData", year: int, iteration: int # Added year, iteration
         ) -> Optional[pd.DataFrame]:
             try:
                 # Access the dataFrame property of the TripPMT instance
                 if hasattr(outputData, 'tripPMT') and outputData.tripPMT is not None:
                     return outputData.tripPMT.dataFrame
                 else:
-                    logger.warning(f"tripPMT attribute not found or is None in {type(outputData).__name__}")
+                    logger.warning(f"tripPMT attribute not found or is None in {type(outputData).__name__} for year {year}")
                     return None
             except Exception as e:
-                logger.error(f"Error accessing tripPMT data: {e}")
+                logger.error(f"Error accessing tripPMT data for year {year}: {e}")
                 return None
         return trip_pmt_by_year_accessor
 
@@ -76,21 +78,22 @@ class TripPMTByPrimaryPurposeByYear(AggregatedProcessedDataFrameBase):
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def trip_pmt_by_primary_purpose_accessor(outputData: "ActivitySimRunOutputData") -> Optional[pd.DataFrame]:
+        def trip_pmt_by_primary_purpose_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                 # Access the dataFrame property of the TripPMTByPrimaryPurpose instance
                 if hasattr(outputData, 'tripPMTByPrimaryPurpose') and outputData.tripPMTByPrimaryPurpose is not None:
                     return outputData.tripPMTByPrimaryPurpose.dataFrame
                 else:
-                     logger.warning(f"tripPMTByPrimaryPurpose attribute not found or is None in {type(outputData).__name__}")
+                     logger.warning(f"tripPMTByPrimaryPurpose attribute not found or is None in {type(outputData).__name__} for year {year}")
                      return None
             except Exception as e:
-                logger.error(f"Error accessing tripPMTByPrimaryPurpose data: {e}")
+                logger.error(f"Error accessing tripPMTByPrimaryPurpose data for year {year}: {e}")
                 return None
         return trip_pmt_by_primary_purpose_accessor
 
@@ -121,25 +124,26 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         (TAZ-level PMT data) from a single ModelOutputData instance.
         This function is passed to the aggregator helper.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def trip_pmt_by_county_accessor(outputData: "ActivitySimRunOutputData") -> Optional[pd.DataFrame]:
+        def trip_pmt_by_county_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                 # Access the dataFrame property of the TripPMTByOrigin instance
                 if hasattr(outputData, 'tripPMTByOrigin') and outputData.tripPMTByOrigin is not None:
                     pmt_by_origin_df = outputData.tripPMTByOrigin.dataFrame
                 else:
-                    logger.warning(f"tripPMTByOrigin attribute not found or is None in {type(outputData).__name__}")
+                    logger.warning(f"tripPMTByOrigin attribute not found or is None in {type(outputData).__name__} for year {year}")
                     pmt_by_origin_df = None
 
 
                 if pmt_by_origin_df is None or pmt_by_origin_df.empty:
                     logger.warning(
-                        f"TripPMTByOrigin data is empty or None for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}."
+                        f"TripPMTByOrigin data is empty or None for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} (Year {year})."
                     )
                     # Return empty DF with expected index levels ['origin', 'trip_mode'] and column 'distanceInMiles'
                     # The accessor should return the data *before* the county aggregation step
@@ -150,7 +154,7 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
 
                 # Ensure distanceInMiles is numeric before summing
                 if "distanceInMiles" not in pmt_by_origin_df.columns:
-                     logger.error(f"'distanceInMiles' column not found in TripPMTByOrigin data for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}")
+                     logger.error(f"'distanceInMiles' column not found in TripPMTByOrigin data for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} (Year {year})")
                      return pd.DataFrame(
                         columns=["distanceInMiles"],
                         index=pd.MultiIndex.from_tuples([], names=["origin", "trip_mode"]),
@@ -164,7 +168,7 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
                 # The index of TripPMTByOrigin is ['trip_mode', 'origin']
                 # Need to reset index to group by columns 'origin' and 'trip_mode'
                 if not isinstance(pmt_by_origin_df.index, pd.MultiIndex) or list(pmt_by_origin_df.index.names) != ["trip_mode", "origin"]:
-                     logger.warning(f"Unexpected index structure for TripPMTByOrigin: {pmt_by_origin_df.index.names}. Expected ['trip_mode', 'origin']. Attempting to reset index.")
+                     logger.warning(f"Unexpected index structure for TripPMTByOrigin: {pmt_by_origin_df.index.names}. Expected ['trip_mode', 'origin']. Attempting to reset index for year {year}.")
                      pmt_by_origin_df = pmt_by_origin_df.reset_index()
                      group_cols = ["origin", "trip_mode"]
                 else:
@@ -174,7 +178,7 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
 
                 # Ensure group columns exist after potential reset
                 if not all(col in pmt_by_origin_df.columns for col in group_cols):
-                     logger.error(f"Required grouping columns {group_cols} not found after index reset for TripPMTByOrigin.")
+                     logger.error(f"Required grouping columns {group_cols} not found after index reset for TripPMTByOrigin for year {year}.")
                      return pd.DataFrame(
                         columns=["distanceInMiles"],
                         index=pd.MultiIndex.from_tuples([], names=["origin", "trip_mode"]),
@@ -186,11 +190,11 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
                 )
 
                 logger.debug(
-                    f"Finished accessor processing for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} ({aggregated_pmt.shape[0]} rows)."
+                    f"Finished accessor processing for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} (Year {year}) ({aggregated_pmt.shape[0]} rows)."
                 )
                 return aggregated_pmt
             except Exception as e:
-                logger.error(f"Error in trip PMT by county accessor: {e}")
+                logger.error(f"Error in trip PMT by county accessor for year {year}: {e}")
                 return pd.DataFrame(
                     columns=["distanceInMiles"],
                     index=pd.MultiIndex.from_tuples([], names=["origin", "trip_mode"]),
@@ -335,21 +339,22 @@ class MandatoryLocationByTazByYear(AggregatedProcessedDataFrameBase, TAZBasedDat
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def mandatory_location_by_taz_accessor(outputData: "ActivitySimRunOutputData") -> Optional[pd.DataFrame]:
+        def mandatory_location_by_taz_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                 # Access the dataFrame property of the MandatoryLocationsByTaz instance
                 if hasattr(outputData, 'mandatoryLocationsByTaz') and outputData.mandatoryLocationsByTaz is not None:
                     return outputData.mandatoryLocationsByTaz.dataFrame
                 else:
-                    logger.warning(f"mandatoryLocationsByTaz attribute not found or is None in {type(outputData).__name__}")
+                    logger.warning(f"mandatoryLocationsByTaz attribute not found or is None in {type(outputData).__name__} for year {year}")
                     return None
             except Exception as e:
-                logger.error(f"Error accessing mandatoryLocationsByTaz data: {e}")
+                logger.error(f"Error accessing mandatoryLocationsByTaz data for year {year}: {e}")
                 return None
         return mandatory_location_by_taz_accessor
 
@@ -394,10 +399,11 @@ class TripModeCountByIteration(AggregatedProcessedDataFrameBase):
         """
         return InfoByIteration
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
         def trip_mode_count_by_iteration_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]:
             try:
@@ -432,10 +438,11 @@ class TourModeCountByIteration(AggregatedProcessedDataFrameBase):
         """
         return InfoByIteration
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
         def tour_mode_count_by_iteration_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]:
             try:
@@ -470,12 +477,13 @@ class TripModeCountByYear(AggregatedProcessedDataFrameBase):
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def trip_mode_count_by_year_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]:
+        def trip_mode_count_by_year_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                 # Note: TripModeCount is not iteration-specific in its load method
                 # The accessor signature includes year and iteration for consistency with the aggregator base
@@ -507,12 +515,13 @@ class TourModeCountByYear(AggregatedProcessedDataFrameBase):
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def tour_mode_count_by_year_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]:
+        def tour_mode_count_by_year_accessor(outputData: "ActivitySimRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                 # Note: TourModeCount is not iteration-specific in its load method
                 # The accessor signature includes year and iteration for consistency with the aggregator base
@@ -551,24 +560,25 @@ class TripsByYear(AggregatedProcessedDataFrameBase):
          """
          return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the specific DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def trips_by_year_accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
+        def trips_by_year_accessor(outputData: "BeamRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                 # Access the trip_pmt dataFrame
                 if hasattr(outputData, 'trip_pmt') and outputData.trip_pmt is not None:
                     trips_df = outputData.trip_pmt.dataFrame
                 else:
-                    logger.warning(f"trip_pmt attribute not found or is None in {type(outputData).__name__}")
+                    logger.warning(f"trip_pmt attribute not found or is None in {type(outputData).__name__} for year {year}")
                     trips_df = None
 
 
                 if trips_df is None or trips_df.empty:
                     logger.warning(
-                        f"TripPMT data is empty or None for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}."
+                        f"TripPMT data is empty or None for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} (Year {year})."
                     )
                     # Return an empty DataFrame with expected columns if needed by the aggregator
                     # Assuming trip_pmt has 'distanceInMiles' and is indexed by 'trip_id'
@@ -581,12 +591,12 @@ class TripsByYear(AggregatedProcessedDataFrameBase):
                 if 'distanceInMiles' in trips_df.columns:
                     return trips_df[['distanceInMiles']] # Example: select a relevant column
                 else:
-                    logger.warning(f"'distanceInMiles' column not found in BeamRunOutputData.trip_pmt for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}")
+                    logger.warning(f"'distanceInMiles' column not found in BeamRunOutputData.trip_pmt for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} (Year {year})")
                     # Return empty DF with expected column and index
                     return pd.DataFrame(columns=['distanceInMiles'], index=pd.Index([], name='trip_id'))
 
             except Exception as e:
-                logger.error(f"Error accessing BeamRunOutputData.trip_pmt data: {e}")
+                logger.error(f"Error accessing BeamRunOutputData.trip_pmt data for year {year}: {e}")
                 return None
         return trips_by_year_accessor
 
@@ -611,21 +621,22 @@ class BeamTripsByYear(AggregatedProcessedDataFrameBase):
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the BEAM trips DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def beam_trips_by_year_accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
+        def beam_trips_by_year_accessor(outputData: "BeamRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                  # Access the dataFrame property of the trips instance
                  if hasattr(outputData, 'trips') and outputData.trips is not None:
                     return outputData.trips.dataFrame # Access BEAM trips dataFrame
                  else:
-                    logger.warning(f"trips attribute not found or is None in {type(outputData).__name__}")
+                    logger.warning(f"trips attribute not found or is None in {type(outputData).__name__} for year {year}")
                     return None
             except Exception as e:
-                logger.error(f"Error accessing BeamRunOutputData.trips data: {e}")
+                logger.error(f"Error accessing BeamRunOutputData.trips data for year {year}: {e}")
                 return None
         return beam_trips_by_year_accessor
 
@@ -648,21 +659,22 @@ class BeamSkimsByYear(AggregatedProcessedDataFrameBase):
         """
         return InfoByYear
 
-    def _get_accessor(self) -> Callable[["ModelOutputData"], Optional[pd.DataFrame]]:
+    def _get_accessor(self) -> Callable[["ModelOutputData", int, int], Optional[pd.DataFrame]]:
         """
         Return the accessor function that extracts the BEAM skims DataFrame
         from a single ModelOutputData instance.
+        The accessor signature must accept outputData, year, and iteration.
         """
-        def beam_skims_by_year_accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
+        def beam_skims_by_year_accessor(outputData: "BeamRunOutputData", year: int, iteration: int) -> Optional[pd.DataFrame]: # Added year, iteration
             try:
                  # Access the dataFrame property of the skims instance
                  if hasattr(outputData, 'skims') and outputData.skims is not None:
                     return outputData.skims.dataFrame # Access BEAM skims dataFrame
                  else:
-                    logger.warning(f"skims attribute not found or is None in {type(outputData).__name__}")
+                    logger.warning(f"skims attribute not found or is None in {type(outputData).__name__} for year {year}")
                     return None
             except Exception as e:
-                logger.error(f"Error accessing BeamRunOutputData.skims data: {e}")
+                logger.error(f"Error accessing BeamRunOutputData.skims data for year {year}: {e}")
                 return None
         return beam_skims_by_year_accessor
 

@@ -41,7 +41,12 @@ class TripPMTByYear(AggregatedProcessedDataFrameBase):
             outputData: "ActivitySimRunOutputData",
         ) -> Optional[pd.DataFrame]:
             try:
-                return outputData.tripPMT.dataFrame
+                # Access the dataFrame property of the TripPMT instance
+                if hasattr(outputData, 'tripPMT') and outputData.tripPMT is not None:
+                    return outputData.tripPMT.dataFrame
+                else:
+                    logger.warning(f"tripPMT attribute not found or is None in {type(outputData).__name__}")
+                    return None
             except Exception as e:
                 logger.error(f"Error accessing tripPMT data: {e}")
                 return None
@@ -51,6 +56,7 @@ class TripPMTByYear(AggregatedProcessedDataFrameBase):
         """
         Return the expected index names of the DataFrame returned by the accessor.
         """
+        # Based on TripPMT definition, the default index is ['trip_mode']
         return ["trip_mode"]
 
     def preprocess(self, df):
@@ -77,7 +83,12 @@ class TripPMTByPrimaryPurposeByYear(AggregatedProcessedDataFrameBase):
         """
         def trip_pmt_by_primary_purpose_accessor(outputData: "ActivitySimRunOutputData") -> Optional[pd.DataFrame]:
             try:
-                return outputData.tripPMTByPrimaryPurpose.dataFrame
+                # Access the dataFrame property of the TripPMTByPrimaryPurpose instance
+                if hasattr(outputData, 'tripPMTByPrimaryPurpose') and outputData.tripPMTByPrimaryPurpose is not None:
+                    return outputData.tripPMTByPrimaryPurpose.dataFrame
+                else:
+                     logger.warning(f"tripPMTByPrimaryPurpose attribute not found or is None in {type(outputData).__name__}")
+                     return None
             except Exception as e:
                 logger.error(f"Error accessing tripPMTByPrimaryPurpose data: {e}")
                 return None
@@ -86,11 +97,10 @@ class TripPMTByPrimaryPurposeByYear(AggregatedProcessedDataFrameBase):
     def _get_expected_index_names(self) -> List[str]:
         """
         Return the expected index names of the DataFrame returned by the accessor.
-        
-        For TripPMTByPrimaryPurposeByYear, the accessor returns data aggregated by origin (TAZ)
-        and trip mode *before* the final county aggregation.
+
+        For TripPMTByPrimaryPurpose, the index is ['trip_mode', 'primary_purpose'].
         """
-        return ["origin", "trip_mode"]
+        return ["trip_mode", "primary_purpose"]
 
     def preprocess(self, df):
         # Default no-op preprocess inherited from ProcessedDataFrame is fine,
@@ -119,30 +129,64 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
         """
         def trip_pmt_by_county_accessor(outputData: "ActivitySimRunOutputData") -> Optional[pd.DataFrame]:
             try:
-                pmt_by_origin_df = outputData.tripPMTByOrigin.dataFrame
+                # Access the dataFrame property of the TripPMTByOrigin instance
+                if hasattr(outputData, 'tripPMTByOrigin') and outputData.tripPMTByOrigin is not None:
+                    pmt_by_origin_df = outputData.tripPMTByOrigin.dataFrame
+                else:
+                    logger.warning(f"tripPMTByOrigin attribute not found or is None in {type(outputData).__name__}")
+                    pmt_by_origin_df = None
+
 
                 if pmt_by_origin_df is None or pmt_by_origin_df.empty:
                     logger.warning(
-                        f"TripPMTByOrigin data is empty or None for run {outputData.inputDirectory.directoryPath}."
+                        f"TripPMTByOrigin data is empty or None for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}."
                     )
                     # Return empty DF with expected index levels ['origin', 'trip_mode'] and column 'distanceInMiles'
+                    # The accessor should return the data *before* the county aggregation step
                     return pd.DataFrame(
                         columns=["distanceInMiles"],
                         index=pd.MultiIndex.from_tuples([], names=["origin", "trip_mode"]),
                     )
 
                 # Ensure distanceInMiles is numeric before summing
+                if "distanceInMiles" not in pmt_by_origin_df.columns:
+                     logger.error(f"'distanceInMiles' column not found in TripPMTByOrigin data for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}")
+                     return pd.DataFrame(
+                        columns=["distanceInMiles"],
+                        index=pd.MultiIndex.from_tuples([], names=["origin", "trip_mode"]),
+                    )
+
                 pmt_by_origin_df["distanceInMiles"] = pd.to_numeric(
                     pmt_by_origin_df["distanceInMiles"], errors="coerce"
                 ).fillna(0)
 
                 # Group by origin (TAZ) and trip_mode to match _get_expected_index_names
-                aggregated_pmt = pmt_by_origin_df.groupby(["origin", "trip_mode"]).agg(
+                # The index of TripPMTByOrigin is ['trip_mode', 'origin']
+                # Need to reset index to group by columns 'origin' and 'trip_mode'
+                if not isinstance(pmt_by_origin_df.index, pd.MultiIndex) or list(pmt_by_origin_df.index.names) != ["trip_mode", "origin"]:
+                     logger.warning(f"Unexpected index structure for TripPMTByOrigin: {pmt_by_origin_df.index.names}. Expected ['trip_mode', 'origin']. Attempting to reset index.")
+                     pmt_by_origin_df = pmt_by_origin_df.reset_index()
+                     group_cols = ["origin", "trip_mode"]
+                else:
+                     # Index is correct, group by index levels
+                     group_cols = ["origin", "trip_mode"]
+
+
+                # Ensure group columns exist after potential reset
+                if not all(col in pmt_by_origin_df.columns for col in group_cols):
+                     logger.error(f"Required grouping columns {group_cols} not found after index reset for TripPMTByOrigin.")
+                     return pd.DataFrame(
+                        columns=["distanceInMiles"],
+                        index=pd.MultiIndex.from_tuples([], names=["origin", "trip_mode"]),
+                    )
+
+
+                aggregated_pmt = pmt_by_origin_df.groupby(group_cols).agg(
                     {"distanceInMiles": "sum"}
                 )
 
                 logger.debug(
-                    f"Finished accessor processing for run {outputData.inputDirectory.directoryPath} ({aggregated_pmt.shape[0]} rows)."
+                    f"Finished accessor processing for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')} ({aggregated_pmt.shape[0]} rows)."
                 )
                 return aggregated_pmt
             except Exception as e:
@@ -158,6 +202,7 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
         Return the expected index names of the DataFrame returned by the accessor
         (at the TAZ level before county aggregation).
         """
+        # The accessor groups by origin and trip_mode
         return ["origin", "trip_mode"]
 
     def preprocess(self, df):
@@ -175,12 +220,20 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
                 )
                 return pd.DataFrame(
                     index=pd.MultiIndex.from_product([[], []], names=["county", "trip_mode"]),
-                    columns=["total_count"]
+                    columns=["total_count"] # Assuming the aggregated value column will be named 'total_count'
                 )
 
             # Validate index structure
-            if not isinstance(taz_agg_df.index, pd.MultiIndex) or taz_agg_df.index.names[0] != 'origin':
-                logger.warning(f"Unexpected index structure in preprocess for {self.name}. Expected 'origin' as first index level.")
+            expected_index_names = self._get_expected_index_names()
+            if not isinstance(taz_agg_df.index, pd.MultiIndex) or list(taz_agg_df.index.names) != expected_index_names:
+                logger.warning(f"Unexpected index structure in preprocess for {self.name}. Expected {expected_index_names} but got {taz_agg_df.index.names}. Attempting to reset index.")
+                taz_agg_df = taz_agg_df.reset_index()
+                # After reset, the columns are the old index names + value columns
+                origin_col = 'origin' # Assuming 'origin' is the column name after reset
+            else:
+                 # Index is correct, 'origin' is the first level
+                 origin_col = taz_agg_df.index.names[0] # Should be 'origin'
+
 
             # Get geometry from the class instance
             geom = self.geometry
@@ -192,27 +245,47 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
                     index=pd.MultiIndex.from_tuples([], names=["county", "trip_mode"]),
                 )
 
+            # Ensure the origin column exists after potential reset
+            if origin_col not in taz_agg_df.columns:
+                 logger.error(f"Origin column '{origin_col}' not found in DataFrame during preprocess for {self.name}.")
+                 return pd.DataFrame(
+                    columns=["total_count"],
+                    index=pd.MultiIndex.from_tuples([], names=["county", "trip_mode"]),
+                )
+
             # Merge with geometry to get county
-            df_merged = taz_agg_df.reset_index().merge(
+            # Need to ensure the geometry index column name matches the origin column name in the dataframe
+            if origin_col != geom.index:
+                 logger.warning(f"Origin column name '{origin_col}' does not match geometry index name '{geom.index}'. Renaming origin column for merge.")
+                 df_to_merge = taz_agg_df.rename(columns={origin_col: geom.index})
+                 left_on_col = geom.index
+            else:
+                 df_to_merge = taz_agg_df
+                 left_on_col = origin_col
+
+
+            df_merged = df_to_merge.merge(
                 geom.gdf[[geom.index, "county"]],
-                left_on="origin",
+                left_on=left_on_col,
                 right_on=geom.index,
                 how="left",
                 suffixes=("", "_geom"),
             )
 
-            # Drop duplicate merge key column if it exists
-            if f"{geom.index}_geom" in df_merged.columns and "origin" != geom.index:
-                df_merged.drop(columns=[f"{geom.index}_geom"], inplace=True)
+            # Drop duplicate merge key column if it exists and is not the original origin column
+            if f"{geom.index}_geom" in df_merged.columns and left_on_col != geom.index:
+                 df_merged.drop(columns=[f"{geom.index}_geom"], inplace=True)
 
             # Check if merge was successful
             if 'county' not in df_merged.columns:
                 raise ValueError(f"Merge with geometry failed. 'county' column not found after merge for {self.name}.")
 
             # Determine value column name
+            # The base class aggregator puts the aggregated value in a column named 'value' by default
             value_column = 'value'
             if value_column not in df_merged.columns:
-                potential_value_columns = [col for col in df_merged.columns if col not in ['origin', 'trip_mode', 'county']]
+                # Fallback: find the first non-index/non-merge column
+                potential_value_columns = [col for col in df_merged.columns if col not in expected_index_names + [origin_col, 'county', geom.index]]
                 if potential_value_columns:
                     value_column = potential_value_columns[0]
                     logger.warning(f"Using '{value_column}' column for aggregation as 'value' was not found in {self.name}.")
@@ -227,6 +300,14 @@ class TripPMTByCountyByYear(TAZBasedDataFrame, AggregatedProcessedDataFrameBase)
             df_merged[value_column] = pd.to_numeric(df_merged[value_column], errors="coerce").fillna(0)
 
             # Aggregate by county and trip_mode
+            # Need to ensure 'trip_mode' column exists after potential index reset
+            if 'trip_mode' not in df_merged.columns:
+                 logger.error(f"'trip_mode' column not found in DataFrame during preprocess for {self.name}.")
+                 return pd.DataFrame(
+                    index=pd.MultiIndex.from_product([[], []], names=["county", "trip_mode"]),
+                    columns=["total_count"]
+                )
+
             county_agg_df = df_merged.groupby(['county', 'trip_mode'])[value_column].sum().reset_index()
             county_agg_df = county_agg_df.rename(columns={value_column: 'total_count'})
             county_agg_df = county_agg_df.set_index(['county', 'trip_mode'])
@@ -261,7 +342,12 @@ class MandatoryLocationByTazByYear(AggregatedProcessedDataFrameBase, TAZBasedDat
         """
         def mandatory_location_by_taz_accessor(outputData: "ActivitySimRunOutputData") -> Optional[pd.DataFrame]:
             try:
-                return outputData.mandatoryLocationsByTaz.dataFrame
+                # Access the dataFrame property of the MandatoryLocationsByTaz instance
+                if hasattr(outputData, 'mandatoryLocationsByTaz') and outputData.mandatoryLocationsByTaz is not None:
+                    return outputData.mandatoryLocationsByTaz.dataFrame
+                else:
+                    logger.warning(f"mandatoryLocationsByTaz attribute not found or is None in {type(outputData).__name__}")
+                    return None
             except Exception as e:
                 logger.error(f"Error accessing mandatoryLocationsByTaz data: {e}")
                 return None
@@ -271,7 +357,30 @@ class MandatoryLocationByTazByYear(AggregatedProcessedDataFrameBase, TAZBasedDat
         """
         Return the expected index names of the DataFrame returned by the accessor.
         """
-        return [self.geometry.index]
+        # Based on MandatoryLocationsByTaz definition, the index is the geoIndex (e.g., 'TAZ')
+        # Need to access the geometry from the class instance itself, not the accessor's input
+        # This requires the accessor to be bound to the class instance, which it is.
+        # However, _get_expected_index_names is called during base class __init__
+        # before the geometry is fully set up in the subclass.
+        # A safer approach is to rely on the known structure or pass geoIndex explicitly.
+        # Assuming the geoIndex is always the first index name for TAZBasedDataFrames used here.
+        # Or, better, make geoIndex a required init parameter for TAZBasedDataFrame.
+        # For now, let's assume the geoIndex is the expected index name.
+        # The MandatoryLocationsByTaz preprocess sets the index name to self.geoIndex.
+        # The accessor returns this preprocessed data.
+        # So the expected index name is the geoIndex.
+        # This method is called by the base class AggregatedProcessedDataFrameBase
+        # to check the index of the DataFrame returned by the accessor.
+        # The accessor returns the dataFrame from MandatoryLocationsByTaz,
+        # which is indexed by self.geoIndex.
+        # We need access to self.geoIndex here.
+        # Since this method is part of the class, self is available.
+        if hasattr(self, 'geoIndex') and self.geoIndex:
+             return [self.geoIndex]
+        else:
+             # Fallback if geoIndex isn't set yet or is None
+             logger.warning("geoIndex not available when calling _get_expected_index_names for MandatoryLocationByTazByYear. Defaulting to ['TAZ'].")
+             return ["TAZ"]
 
 
 class TripModeCountByIteration(AggregatedProcessedDataFrameBase):
@@ -294,9 +403,13 @@ class TripModeCountByIteration(AggregatedProcessedDataFrameBase):
             try:
                 # Note: TripModeCount is not iteration-specific in its load method
                 # The accessor signature includes year and iteration for consistency with the aggregator base
-                return outputData.tripModeCount.dataFrame
+                if hasattr(outputData, 'tripModeCount') and outputData.tripModeCount is not None:
+                    return outputData.tripModeCount.dataFrame
+                else:
+                    logger.warning(f"tripModeCount attribute not found or is None in {type(outputData).__name__} for year {year}, iteration {iteration}")
+                    return None
             except Exception as e:
-                logger.error(f"Error accessing tripModeCount data for iteration: {e}")
+                logger.error(f"Error accessing tripModeCount data for iteration {iteration}: {e}")
                 return None
         return trip_mode_count_by_iteration_accessor
 
@@ -304,6 +417,7 @@ class TripModeCountByIteration(AggregatedProcessedDataFrameBase):
         """
         Return the expected index names of the DataFrame returned by the accessor.
         """
+        # Based on TripModeCount definition, the index is ['trip_mode']
         return ["trip_mode"]
 
 
@@ -327,9 +441,13 @@ class TourModeCountByIteration(AggregatedProcessedDataFrameBase):
             try:
                 # Note: TourModeCount is not iteration-specific in its load method
                 # The accessor signature includes year and iteration for consistency with the aggregator base
-                return outputData.tourModeCount.dataFrame
+                if hasattr(outputData, 'tourModeCount') and outputData.tourModeCount is not None:
+                    return outputData.tourModeCount.dataFrame
+                else:
+                    logger.warning(f"tourModeCount attribute not found or is None in {type(outputData).__name__} for year {year}, iteration {iteration}")
+                    return None
             except Exception as e:
-                logger.error(f"Error accessing tourModeCount data for iteration: {e}")
+                logger.error(f"Error accessing tourModeCount data for iteration {iteration}: {e}")
                 return None
         return tour_mode_count_by_iteration_accessor
 
@@ -337,6 +455,7 @@ class TourModeCountByIteration(AggregatedProcessedDataFrameBase):
         """
         Return the expected index names of the DataFrame returned by the accessor.
         """
+        # Based on TourModeCount definition, the index is ['tour_mode']
         return ["tour_mode"]
 
 
@@ -360,9 +479,13 @@ class TripModeCountByYear(AggregatedProcessedDataFrameBase):
             try:
                 # Note: TripModeCount is not iteration-specific in its load method
                 # The accessor signature includes year and iteration for consistency with the aggregator base
-                return outputData.tripModeCount.dataFrame
+                if hasattr(outputData, 'tripModeCount') and outputData.tripModeCount is not None:
+                    return outputData.tripModeCount.dataFrame
+                else:
+                    logger.warning(f"tripModeCount attribute not found or is None in {type(outputData).__name__} for year {year}")
+                    return None
             except Exception as e:
-                logger.error(f"Error accessing tripModeCount data for year: {e}")
+                logger.error(f"Error accessing tripModeCount data for year {year}: {e}")
                 return None
         return trip_mode_count_by_year_accessor
 
@@ -370,6 +493,7 @@ class TripModeCountByYear(AggregatedProcessedDataFrameBase):
         """
         Return the expected index names of the DataFrame returned by the accessor.
         """
+        # Based on TripModeCount definition, the index is ['trip_mode']
         return ["trip_mode"]
 
 class TourModeCountByYear(AggregatedProcessedDataFrameBase):
@@ -392,9 +516,13 @@ class TourModeCountByYear(AggregatedProcessedDataFrameBase):
             try:
                 # Note: TourModeCount is not iteration-specific in its load method
                 # The accessor signature includes year and iteration for consistency with the aggregator base
-                return outputData.tourModeCount.dataFrame
+                if hasattr(outputData, 'tourModeCount') and outputData.tourModeCount is not None:
+                    return outputData.tourModeCount.dataFrame
+                else:
+                    logger.warning(f"tourModeCount attribute not found or is None in {type(outputData).__name__} for year {year}")
+                    return None
             except Exception as e:
-                logger.error(f"Error accessing tourModeCount data for year: {e}")
+                logger.error(f"Error accessing tourModeCount data for year {year}: {e}")
                 return None
         return tour_mode_count_by_year_accessor
 
@@ -402,6 +530,7 @@ class TourModeCountByYear(AggregatedProcessedDataFrameBase):
         """
         Return the expected index names of the DataFrame returned by the accessor.
         """
+        # Based on TourModeCount definition, the index is ['tour_mode']
         return ["tour_mode"]
 
 
@@ -430,11 +559,16 @@ class TripsByYear(AggregatedProcessedDataFrameBase):
         def trips_by_year_accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
             try:
                 # Access the trip_pmt dataFrame
-                trips_df = outputData.trip_pmt.dataFrame
+                if hasattr(outputData, 'trip_pmt') and outputData.trip_pmt is not None:
+                    trips_df = outputData.trip_pmt.dataFrame
+                else:
+                    logger.warning(f"trip_pmt attribute not found or is None in {type(outputData).__name__}")
+                    trips_df = None
+
 
                 if trips_df is None or trips_df.empty:
                     logger.warning(
-                        f"TripPMT data is empty or None for run {outputData.inputDirectory.directoryPath}."
+                        f"TripPMT data is empty or None for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}."
                     )
                     # Return an empty DataFrame with expected columns if needed by the aggregator
                     # Assuming trip_pmt has 'distanceInMiles' and is indexed by 'trip_id'
@@ -444,7 +578,13 @@ class TripsByYear(AggregatedProcessedDataFrameBase):
                 # Select relevant columns and return
                 # Need to confirm actual columns available in BeamRunOutputData.trip_pmt
                 # For now, returning the whole dataframe as a placeholder
-                return trips_df[['distanceInMiles']] # Example: select a relevant column
+                if 'distanceInMiles' in trips_df.columns:
+                    return trips_df[['distanceInMiles']] # Example: select a relevant column
+                else:
+                    logger.warning(f"'distanceInMiles' column not found in BeamRunOutputData.trip_pmt for run {getattr(outputData.inputDirectory, 'directoryPath', 'Unknown')}")
+                    # Return empty DF with expected column and index
+                    return pd.DataFrame(columns=['distanceInMiles'], index=pd.Index([], name='trip_id'))
+
             except Exception as e:
                 logger.error(f"Error accessing BeamRunOutputData.trip_pmt data: {e}")
                 return None
@@ -478,7 +618,12 @@ class BeamTripsByYear(AggregatedProcessedDataFrameBase):
         """
         def beam_trips_by_year_accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
             try:
-                 return outputData.trips.dataFrame # Access BEAM trips dataFrame
+                 # Access the dataFrame property of the trips instance
+                 if hasattr(outputData, 'trips') and outputData.trips is not None:
+                    return outputData.trips.dataFrame # Access BEAM trips dataFrame
+                 else:
+                    logger.warning(f"trips attribute not found or is None in {type(outputData).__name__}")
+                    return None
             except Exception as e:
                 logger.error(f"Error accessing BeamRunOutputData.trips data: {e}")
                 return None
@@ -510,7 +655,12 @@ class BeamSkimsByYear(AggregatedProcessedDataFrameBase):
         """
         def beam_skims_by_year_accessor(outputData: "BeamRunOutputData") -> Optional[pd.DataFrame]:
             try:
-                 return outputData.skims.dataFrame # Access BEAM skims dataFrame
+                 # Access the dataFrame property of the skims instance
+                 if hasattr(outputData, 'skims') and outputData.skims is not None:
+                    return outputData.skims.dataFrame # Access BEAM skims dataFrame
+                 else:
+                    logger.warning(f"skims attribute not found or is None in {type(outputData).__name__}")
+                    return None
             except Exception as e:
                 logger.error(f"Error accessing BeamRunOutputData.skims data: {e}")
                 return None
